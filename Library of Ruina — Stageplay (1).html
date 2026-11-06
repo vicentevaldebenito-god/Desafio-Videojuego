@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+    <title>Library of Ruina — Stageplay</title>
+    <link rel="stylesheet" href="static/css/style.css">
+</head>
+
+<body>
+    <canvas id="bg"></canvas>
+    <div class="scr on" id="s1">
+        <div class="rail"><img class="blend" data-u="rail0"><img class="blend" data-u="rail1"><img class="blend"
+                data-u="rail2"><img class="blend" data-u="rail3"></div>
+        <div class="ttl">The Invitation</div>
+        <div id="inf"></div>
+        <div class="tree"><img class="blend" data-u="cats" style="width:min(520px,90%)"><img class="ban"
+                data-u="ban_myth">
+            <div id="tree" style="width:100%;display:flex;flex-direction:column;align-items:center;gap:10px"></div><img
+                class="ban" data-u="ban_canard">
+        </div>
+        <div class="panel" id="pn"><img class="cn tl blend" data-u="corner"><img class="cn tr blend"
+                data-u="corner"><img class="cn bl blend" data-u="corner"><img class="cn br blend" data-u="corner">
+            <h2>THE INVITATION</h2>
+            <div class="letter">Dear Guest: I formally invite you to the Library.<br>The Library's books can provide you
+                with all the wisdom, wealth, honor, and power you seek.<br>However, an ordeal will await you in the
+                Library.<br>If you cannot overcome this ordeal, you will be converted into a book yourself.<br>— Angela
+            </div>
+            <div class="slots" id="slots"></div>
+            <div style="letter-spacing:2px;font-size:13px">ADDRESSEE</div>
+            <div class="big" id="ad">?</div>
+            <div id="adn">???</div><button class="ib" id="send" disabled><img data-u="send_off"></button>
+        </div>
+    </div>
+    <div class="scr" id="s2">
+        <div class="rail"><img class="blend" data-u="rail0"><img class="blend" data-u="rail1"><img class="blend"
+                data-u="rail2"><img class="blend" data-u="rail3"></div>
+        <div id="p2">
+            <div class="col cl"><b>Enemigos</b>
+                <div id="enL"></div>
+            </div>
+            <div class="col cc"><button class="ib" id="start" disabled><img data-u="stage"></button>
+                <div id="dm" style="font-size:12px;color:#ff9a6a"></div><img class="blend" data-u="tree"
+                    style="width:220px;margin:6px auto">
+            </div>
+            <div class="col cr">
+                <div id="tb"></div>
+                <div id="pst" style="font-size:13px;line-height:1.6;margin:6px 0"></div><b>Mazo (clic para quitar) —
+                    <span id="cnt"></span>/9</b>
+                <div id="deck" class="grid"></div><b style="display:block;margin-top:8px">Biblioteca de páginas (clic
+                    para añadir, máx. 2 copias)</b>
+                <div class="grid" id="pool"></div>
+            </div>
+        </div>
+    </div>
+    <div class="scr" id="s3"><canvas id="cv" width="960" height="540"></canvas>
+        <div id="msg"></div>
+        <div id="insp"></div>
+        <div id="tabs"></div><button class="btn" id="go">Resolver Escena</button>
+        <div id="hand"></div>
+        <div id="emo">
+            <div>
+                <h2 style="color:#ff6af0" id="et2"></h2>
+                <div id="eos"></div>
+            </div>
+        </div>
+        <div id="end">
+            <div>
+                <div id="et" style="font-size:38px"></div><button class="btn" onclick="location.reload()">Volver a la
+                    Invitación</button>
+            </div>
+        </div>
+    </div>
+    <script src="static/js/script.js"></script>
+</body>
+
+</html>
