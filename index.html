@@ -114,6 +114,16 @@
       const mouse = { x: W / 2, y: H / 2, l: false, r: false, lp: false, rp: false };
       let wheelDir = 0;
       window.addEventListener('keydown', e => {
+        const target = e.target;
+        const typing = target && (
+          target.matches('input, textarea, select') ||
+          target.isContentEditable
+        );
+        if (typing) {
+          keys[e.code] = false;
+          pressed[e.code] = false;
+          return;
+        }
         if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Tab'].includes(e.code)) e.preventDefault();
         if (!keys[e.code]) pressed[e.code] = true;
         keys[e.code] = true;
@@ -507,7 +517,9 @@
           [[280, 190], [W - 280 - s, 190], [280, H - 190 - s], [W - 280 - s, H - 190 - s]].forEach(p => obstacles.push({ x: p[0], y: p[1], w: s, h: s }));
           return;
         }
-        const n = randi(3, 6); let tries = 0;
+        const mpCount = MP && MP.connected ? clamp(Number(MP.players) || 1, 1, 4) : 1;
+        const n = mpCount > 1 ? Math.max(1, randi(3, 6) - (mpCount - 1) * 2) : randi(3, 6);
+        let tries = 0;
         while (obstacles.length < n && tries++ < 300) {
           const horiz = Math.random() < 0.5;
           const w = horiz ? randi(90, 200) : randi(40, 70), h = horiz ? randi(40, 70) : randi(90, 200);
@@ -535,6 +547,9 @@
       function makeWaves() {
         const ri = (floorN - 1) * ROOMS + roomN + loop * 12;
         let b = 5 + ri * 2 + ri * ri * 0.9;
+        const mpCount = MP && MP.connected ? clamp(Number(MP.players) || 1, 1, 4) : 1;
+        const enemyMultiplier = [1, 2, 2.5, 3][mpCount - 1];
+        b *= enemyMultiplier;
         const list = [];
         const pool = loop === 0 && floorN === 1 ? ['stalker', 'stalker', 'drone'] : loop === 0 && floorN === 2 ? ['stalker', 'drone', 'dodger', 'dodger', 'tank'] : ['stalker', 'drone', 'dodger', 'tank', 'spitter', 'sniper', 'guardian'].concat(loop >= 1 ? ['bomber', 'phantom'] : []);
         while (b > 0 && list.length < 500) { let t = pool[Math.floor(Math.random() * pool.length)]; if (b < ET[t].cost) t = 'stalker'; list.push(t); b -= ET[t].cost; }
@@ -629,7 +644,9 @@
         if (MP && MP.connected && !MP.isHost) return null;
         const base = ET[type];
         const sc = (1 + 0.2 * (floorN - 1) + 0.04 * (roomN - 1)) * Math.pow(1.45, loop) * (1 + 0.15 * cfg.pres);
-        const hp = type === 'boss' ? BOSS_HP[floorN - 1] * Math.pow(1.45, loop) * (1 + 0.15 * cfg.pres) : base.hp * sc;
+        const mpCount = MP && MP.connected ? clamp(Number(MP.players) || 1, 1, 4) : 1;
+        const enemyHpMultiplier = [1, 2, 3, 4][mpCount - 1];
+        const hp = (type === 'boss' ? BOSS_HP[floorN - 1] * Math.pow(1.45, loop) * (1 + 0.15 * cfg.pres) : base.hp * sc) * enemyHpMultiplier;
         const e = {
           netId: crypto.randomUUID(),
           type, x, y, vx: 0, vy: 0, r: base.r, hp, maxHp: hp, speed: base.speed * (1 + 0.05 * (floorN - 1)) * (type === 'boss' ? 1 : 1),
@@ -652,7 +669,7 @@
         const list = waveQueue.shift();
         for (const t of list) {
           const pos = t === 'boss' ? { x: W / 2, y: 230 } : spawnPos(t === 'mini' ? 34 : ET[t].r);
-          if (t === 'mini') { const m = spawnEnemy('tank', pos.x, pos.y); m.mini = true; m.r = 32; m.hp = m.maxHp = 1500 * (1 + 0.25 * (floorN - 1)) * Math.pow(1.45, loop); m.speed *= 1.25; m.score = 1500; banner = { t: 2, max: 2, l1: '¡MINIJEFE!', l2: 'Derrótalo para ganar un charm' }; }
+          if (t === 'mini') { const m = spawnEnemy('tank', pos.x, pos.y); m.mini = true; m.r = 32; m.hp = m.maxHp = 1500 * (1 + 0.25 * (floorN - 1)) * Math.pow(1.45, loop) * ([1, 2, 3, 4][clamp(Number(MP && MP.connected ? MP.players : 1) || 1, 1, 4) - 1]); m.speed *= 1.25; m.score = 1500; banner = { t: 2, max: 2, l1: '¡MINIJEFE!', l2: 'Derrótalo para ganar un charm' }; }
           else { const ne = spawnEnemy(t, pos.x, pos.y); if (ne && t !== 'boss') ne.speed *= 1 + 0.04 * cfg.pres; if (loop >= 1 && t !== 'boss' && ne && Math.random() < Math.min(0.5, 0.1 + 0.12 * loop)) { const af = ['shield', 'volatile', 'regen', 'frenzy'][Math.floor(Math.random() * 4)]; ne.af = af; if (af === 'shield') ne.hp = ne.maxHp = ne.maxHp * 1.8; if (af === 'frenzy') ne.speed *= 1.4; } if (t === 'boss') { const b = enemies[enemies.length - 1]; b.spawnT = 0; b.orbit = 4.5; } }
         }
       }
@@ -1510,7 +1527,9 @@
       function genDungeon() {
         const cells = {}, key = (x, y) => x + ',' + y, D = [[1, 0], [-1, 0], [0, 1], [0, -1]], add = (x, y, d) => (cells[key(x, y)] = { x, y, d, type: 'combat', cleared: false, visited: false });
         add(0, 0, 0); cells['0,0'].type = 'start'; cells['0,0'].cleared = true; cells['0,0'].visited = true;
-        const n = 9 + Math.floor(Math.random() * 4); let g = 0;
+        const mpCount = MP && MP.connected ? clamp(Number(MP.players) || 1, 1, 4) : 1;
+        const n = 9 + Math.floor(Math.random() * 4) + (mpCount - 1) * 3;
+        let g = 0;
         while (Object.keys(cells).length < n && g++ < 800) { const ks = Object.keys(cells), b = cells[ks[Math.floor(Math.random() * ks.length)]], d = D[Math.floor(Math.random() * 4)], x = b.x + d[0], y = b.y + d[1]; if (cells[key(x, y)]) continue; let nb = 0; for (const q of D) if (cells[key(x + q[0], y + q[1])]) nb++; if (nb > 1) continue; add(x, y, b.d + 1); }
         const deg = c => D.filter(q => cells[key(c.x + q[0], c.y + q[1])]).length;
         const leaves = Object.values(cells).filter(c => c !== cells['0,0'] && deg(c) === 1).sort((a, b) => b.d - a.d);
@@ -1723,6 +1742,8 @@
       }
       function applyLayout(boss) {
         if (boss || (cell.type !== 'combat' && cell.type !== 'start')) return;
+        // En cooperativo dejamos más espacio libre para que todos puedan moverse.
+        if (MP && MP.connected && MP.players > 1) return;
         const k = Math.floor(Math.random() * 6), o = [], rc = (x, y, w, h) => o.push({ x, y, w, h });
         if (k === 0) return;
         if (k === 1) { rc(300, 200, 90, 90); rc(890, 200, 90, 90); rc(300, 430, 90, 90); rc(890, 430, 90, 90); }
