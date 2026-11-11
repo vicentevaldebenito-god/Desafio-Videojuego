@@ -183,7 +183,7 @@
         ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.font='bold 15px Arial';
         ctx.fillStyle='#ffd08a'; ctx.fillText('DASH',970,590);
         ctx.fillStyle='#baffc8'; ctx.fillText('ESPECIAL',1090,590);
-        ctx.fillStyle='#b8f4ff'; ctx.fillText('USAR',1180,462); ctx.fillText('E',1180,484);
+        ctx.fillStyle='#b8f4ff'; ctx.fillText('USAR',1180,462); ctx.fillText('R',1180,484);
         ctx.fillStyle='rgba(180,225,245,.72)'; ctx.font='12px Arial'; ctx.fillText('MOVER',142,682);
         ctx.restore();
       }
@@ -234,7 +234,7 @@
           touchPad.specialId = e.pointerId; pressed.KeyF = true;
         } else if (p.x > 1090 && p.y > 385 && p.y <= 535 && touchPad.interactId === null) {
           touchPad.interactId = e.pointerId;
-          mouse.lp = true; pressed.Enter = true;
+          pressed.KeyR = true;
         } else {
           // Tocar el resto de la pantalla sirve para seleccionar menús y cartas.
           mouse.x = p.x; mouse.y = p.y; mouse.lp = true;
