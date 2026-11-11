@@ -2185,7 +2185,14 @@
         { id:'sniper', title:'FRANCOTIRADOR ABISAL', origin:'Depredador de precisión · Tirador', desc:'Una criatura estilizada que observa desde lejos. Su cuerpo concentra energía antes de realizar disparos precisos.', behavior:'Busca una línea de tiro y ataca desde la distancia. Su amenaza aumenta cuando el buzo permanece quieto.', clue:'Muévete constantemente y rompe su línea de tiro.' },
         { id:'bomber', title:'MEDUSA BOMBA', origin:'Cnidario abisal · Amenaza explosiva', desc:'Una medusa de campana luminosa y filamentos sensibles. Su brillo se intensifica cuando se prepara para liberar energía.', behavior:'Se aproxima al buzo y utiliza una detonación de área. Mantén distancia cuando comience a brillar.', clue:'Aléjate en cuanto detectes su carga.' },
         { id:'phantom', title:'ESPECTRO DEL FONDO', origin:'Entidad abisal · Acechador', desc:'Una presencia translúcida que apenas se distingue del agua oscura. Sus contornos parecen deshacerse y recomponerse.', behavior:'Se desplaza con rapidez y utiliza ataques especiales para sorprender al buzo. No siempre es fácil seguir su posición.', clue:'Observa sus destellos y evita quedarte aislado.' },
-        { id:'boss', title:'LEVIATÁN', origin:'Entidad colosal · Jefe abisal', desc:'Una criatura gigantesca que domina las cámaras profundas. Su anatomía está adaptada para soportar daño y controlar grandes espacios.', behavior:'Alterna patrones de proyectiles, embestidas y fases especiales. Cuando entra en desesperación, debes sobrevivir a toda la secuencia antes de poder derrotarlo.', clue:'Lee las señales de cada ataque y no desperdicies oportunidades.' }
+        { id:'boss', title:'LEVIATÁN HUÉRFANO', visualFloor:1, origin:'Jefe abisal · Primer guardián', desc:'Una criatura antigua de las primeras fosas. Su cuerpo alargado, placas superpuestas y mandíbula llena de dientes parecen restos de una especie que quedó aislada durante siglos.', behavior:'Alterna embestidas, barridos y patrones de proyectiles. Cuando se debilita entra en desesperación y encadena ataques de persecución y captura.', clue:'Mantén la distancia y aprende a leer sus embestidas.' },
+        { id:'boss2', title:'COLOSO DE LA FOSA', visualFloor:2, origin:'Jefe abisal · Coloso de aguas profundas', desc:'Una masa enorme adaptada a la presión extrema. Sus apéndices y su cuerpo pesado parecen absorber la luz que lo rodea.', behavior:'Controla grandes zonas con ataques de área y movimientos pesados. Sus cambios de fase alteran el ritmo del combate y castigan quedarse quieto.', clue:'No confundas su lentitud con seguridad: prepara espacio para esquivar.' },
+        { id:'boss3', title:'KRAKEN DEL ABISMO', visualFloor:3, origin:'Jefe abisal · Cefalópodo territorial', desc:'Un cefalópodo gigantesco cuyos tentáculos se extienden por toda la cámara. Su núcleo luminoso parece coordinar cada uno de sus movimientos.', behavior:'Utiliza tentáculos y patrones que cubren distintas direcciones. Puede dominar el centro de la arena y obligarte a cambiar constantemente de posición.', clue:'Observa el suelo y los bordes de la arena antes de moverte.' },
+        { id:'boss4', title:'EL ECO', visualFloor:4, origin:'Jefe abisal · Aparición de la fosa', desc:'Una presencia extraña que parece confundirse con las corrientes oscuras. Sus movimientos dejan la sensación de que la criatura aparece en más de un lugar.', behavior:'Combina desplazamientos repentinos y ataques que buscan sorprender desde distintos ángulos. La oscuridad de la zona dificulta seguir su posición.', clue:'No persigas su silueta a ciegas; espera a identificar su trayectoria.' },
+        { id:'boss5', title:'ANGUILA TRUENO', visualFloor:5, origin:'Jefe abisal · Depredador eléctrico', desc:'Una anguila de gran tamaño con órganos luminosos que recorren su cuerpo. La energía acumulada en sus aletas ilumina brevemente el agua antes de cada descarga.', behavior:'Se impulsa con rapidez y libera ataques eléctricos en líneas y áreas. Sus cambios de ritmo hacen peligroso quedarse cerca demasiado tiempo.', clue:'Aléjate de las líneas de energía y aprovecha sus pausas.' },
+        { id:'boss6', title:'LA COLMENA ABISAL', visualFloor:6, origin:'Jefe abisal · Organismo colonial', desc:'No parece un solo animal, sino una colonia de organismos unidos alrededor de un núcleo. Cada parte de su cuerpo reacciona como si tuviera voluntad propia.', behavior:'Presiona con múltiples amenazas y ataques coordinados. Su presencia convierte la arena en un espacio difícil de controlar.', clue:'Prioriza sobrevivir a los patrones simultáneos y busca ventanas seguras.' },
+        { id:'boss7', title:'LA BALLENA HUECA', visualFloor:7, origin:'Jefe abisal · Gigante errante', desc:'Una criatura colosal cuyo interior parece vacío. Su enorme silueta apenas se distingue en la oscuridad y sus movimientos hacen vibrar toda la cámara.', behavior:'Resiste grandes cantidades de daño y utiliza ataques de gran alcance. Sus movimientos lentos pueden cubrir una parte importante de la arena.', clue:'Anticipa hacia dónde se desplazará y evita quedar frente a su cuerpo.' },
+        { id:'boss8', title:'LA AMALGAMA', visualFloor:8, visualForm:7, origin:'Jefe abisal · Entidad cambiante', desc:'Una unión imposible de formas abisales. Su cuerpo cambia de estructura como si varias criaturas lucharan por controlar una misma masa.', behavior:'Alterna distintas formas y adapta sus ataques durante el combate. No existe una única distancia segura: cada transformación exige una respuesta diferente.', clue:'Identifica su forma actual antes de comprometerte con un ataque.' }
       ];
       function updateLogs() {
         if (pressed.Escape || pressed.KeyB) { bestMenu = false; return; }
@@ -2194,7 +2201,7 @@
         if (mouse.lp) {
           const x=mouse.x, y=mouse.y;
           if (x<210 && y>620) { bestMenu=false; return; }
-          if (x>=55 && x<=445 && y>=145 && y<645) logsSelected=clamp(Math.floor((y-151)/49),0,LOG_ENTRIES.length-1);
+          if (x>=55 && x<=445 && y>=145 && y<645) logsSelected=clamp(Math.floor((y-151)/27),0,LOG_ENTRIES.length-1);
         }
       }
       function drawLogParagraph(str,x,y,maxW,lineH,size,color) {
@@ -2211,13 +2218,13 @@
         txt('ESC / B: CERRAR  ·  ↑ ↓: EXPLORAR  ·  CLIC: SELECCIONAR',W/2,121,12,'#cfe0f0','center');
         ctx.fillStyle='rgba(4,15,28,.94)';ctx.fillRect(48,145,398,510);ctx.strokeStyle='#28485f';ctx.lineWidth=2;ctx.strokeRect(48,145,398,510);
         LOG_ENTRIES.forEach((it,i)=>{
-          const y=151+i*49,active=i===logsSelected,n=meta.t[it.id]||0,c=ET[it.id].color;
-          ctx.fillStyle=active?'rgba(30,75,100,.8)':'rgba(8,24,40,.68)';ctx.fillRect(56,y,382,44);
-          ctx.strokeStyle=active?c:'#20394d';ctx.lineWidth=active?2.5:1;ctx.strokeRect(56,y,382,44);
-          ctx.fillStyle=c;ctx.beginPath();ctx.arc(76,y+22,7,0,TAU);ctx.fill();
-          txt(String(i+1).padStart(2,'0'),98,y+17,10,'#7899ad','left');
-          txt(it.title,120,y+26,active?12:11,active?'#ffffff':'#9bb2c4','left');
-          txt(n+' BAJAS',425,y+26,9,n?'#a8e8c5':'#607486','right');
+          const y=151+i*27,active=i===logsSelected,n=it.id.startsWith('boss')?(meta.t.boss||0):(meta.t[it.id]||0),c=it.id.startsWith('boss')?'#ff4fd8':ET[it.id].color;
+          ctx.fillStyle=active?'rgba(30,75,100,.8)':'rgba(8,24,40,.68)';ctx.fillRect(56,y,382,24);
+          ctx.strokeStyle=active?c:'#20394d';ctx.lineWidth=active?2.5:1;ctx.strokeRect(56,y,382,24);
+          ctx.fillStyle=c;ctx.beginPath();ctx.arc(76,y+12,5,0,TAU);ctx.fill();
+          txt(String(i+1).padStart(2,'0'),94,y+16,9,'#7899ad','left');
+          txt(it.title,115,y+16,active?10:9,active?'#ffffff':'#9bb2c4','left');
+          txt(n+' BAJAS',425,y+16,8,n?'#a8e8c5':'#607486','right');
         });
         ctx.fillStyle='rgba(4,15,28,.94)';ctx.fillRect(466,145,766,510);ctx.strokeStyle=col;ctx.lineWidth=2;ctx.strokeRect(466,145,766,510);
         txt('REGISTRO Nº '+String(logsSelected+1).padStart(2,'0'),492,174,11,col,'left');
@@ -2225,8 +2232,9 @@
         txt(entry.origin.toUpperCase(),492,237,11,col,'left');
         ctx.save();ctx.fillStyle='rgba(12,34,52,.88)';ctx.fillRect(492,258,270,230);ctx.strokeStyle='rgba(125,190,220,.35)';ctx.lineWidth=1.5;ctx.strokeRect(492,258,270,230);
         ctx.fillStyle='rgba(125,190,220,.65)';ctx.font='10px Consolas';ctx.textAlign='left';ctx.fillText('MUESTRA VISUAL',507,278);
-        const sample={type:entry.id,x:627,y:377,r:entry.id==='boss'?65:Math.max(24,ET[entry.id].r*2.05),hp:ET[entry.id].hp,maxHp:ET[entry.id].hp,t:time,face:-0.18,state:'idle',spawnT:0,spawnMax:1,flash:0,slow:0,burn:0,blind:0,marked:0,stun:0,corrode:0,corrodeT:0,hitCd:0,boss:entry.id==='boss',mini:false,shield:0,vuln:0,vulnT:0,parryT:0,dodgeT:0,reflect:0,ecd:0};
-        ctx.beginPath();ctx.rect(493,279,268,208);ctx.clip();drawEnemy(sample);ctx.restore();
+        const isBossLog=entry.id.startsWith('boss'), sample={type:isBossLog?'boss':entry.id,x:627,y:377,r:isBossLog?65:Math.max(24,ET[entry.id].r*2.05),hp:isBossLog?ET.boss.hp:ET[entry.id].hp,maxHp:isBossLog?ET.boss.hp:ET[entry.id].hp,t:time,face:-0.18,state:'walk',spawnT:0,spawnMax:1,flash:0,slow:0,burn:0,blind:0,marked:0,stun:0,corrode:0,corrodeT:0,hitCd:0,boss:isBossLog,mini:false,shield:0,vuln:0,vulnT:0,parryT:0,dodgeT:0,reflect:0,ecd:0,cam:0,vis:-0.18,orbit:0};
+        const oldFloor=floorN,oldForm=amalForm;if(isBossLog){floorN=entry.visualFloor;if(floorN===8)amalForm=entry.visualForm||7;}
+        ctx.beginPath();ctx.rect(493,279,268,208);ctx.clip();drawEnemy(sample);floorN=oldFloor;amalForm=oldForm;ctx.restore();
         txt('ESTADO DEL REGISTRO',790,273,11,'#7f9db2','left');txt('DOCUMENTADO',1208,273,10,'#7dffb0','right');
         txt('DESCRIPCIÓN',790,310,12,col,'left');drawLogParagraph(entry.desc,790,337,410,19,14,'#d2e4ef');
         txt('COMPORTAMIENTO',790,405,12,col,'left');drawLogParagraph(entry.behavior,790,432,410,19,14,'#d2e4ef');
