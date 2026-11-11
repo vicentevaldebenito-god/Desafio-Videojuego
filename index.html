@@ -626,10 +626,12 @@
         return { x: W / 2, y: 200 };
       }
       function spawnEnemy(type, x, y) {
+        if (MP && MP.connected && !MP.isHost) return null;
         const base = ET[type];
         const sc = (1 + 0.2 * (floorN - 1) + 0.04 * (roomN - 1)) * Math.pow(1.45, loop) * (1 + 0.15 * cfg.pres);
         const hp = type === 'boss' ? BOSS_HP[floorN - 1] * Math.pow(1.45, loop) * (1 + 0.15 * cfg.pres) : base.hp * sc;
         const e = {
+          netId: crypto.randomUUID(),
           type, x, y, vx: 0, vy: 0, r: base.r, hp, maxHp: hp, speed: base.speed * (1 + 0.05 * (floorN - 1)) * (type === 'boss' ? 1 : 1),
           face: 0, spawnT: type === 'boss' ? 2.8 : 0.9, spawnMax: type === 'boss' ? 2.8 : 0.9,
           flash: 0, slow: 0, burn: 0, blind: 0, marked: 0, stun: 0, corrode: 0, corrodeT: 0, hitCd: 0, t: rand(0, 10),
@@ -641,6 +643,8 @@
         return e;
       }
       function spawnWave() {
+        // Las apariciones de enemigos solo las decide el anfitrión.
+        if (MP && MP.connected && !MP.isHost) return;
         const list = waveQueue.shift();
         for (const t of list) {
           const pos = t === 'boss' ? { x: W / 2, y: 230 } : spawnPos(t === 'mini' ? 34 : ET[t].r);
@@ -1353,6 +1357,8 @@
       }
 
       function updateEnemies(dt) {
+        // El anfitrión es la autoridad de la IA y el movimiento de enemigos.
+        if (MP && MP.connected && !MP.isHost) return;
         for (const e of enemies) updateEnemy(e, dt);
         // separación entre enemigos
         for (let i = 0; i < enemies.length; i++) {
@@ -3218,6 +3224,11 @@ for (const remote of MP.remotePlayers.values()) {
             return;
           }
 
+          if (data.type === "world-state" && !MP.isHost) {
+            mpApplyWorld(data);
+            return;
+          }
+
           if (data.type === "welcome") {
             if (data.id) MP.id = data.id;
             MP.hostId = data.hostId || null;
@@ -3273,6 +3284,55 @@ for (const remote of MP.remotePlayers.values()) {
       // SINCRONIZACIÓN MULTIJUGADOR
       // ==========================================
 
+      const MP_WORLD_FIELDS = [
+        'type','x','y','vx','vy','r','hp','maxHp','speed','face','spawnT','spawnMax',
+        'flash','slow','burn','blind','marked','stun','corrode','corrodeT','hitCd',
+        't','state','st','cd','side','sideT','pull','pullT','dead','boss','mini',
+        'score','wanderT','wA','hitDone','cA','n','af','orbit','orbitT','phase',
+        'shield','vuln','vulnT','parryT','dodgeT','dodgeA','reflect','ecd'
+      ];
+      let mpWorldTimer = 0;
+      let mpWorldRevision = 0;
+
+      function mpApplyWorld(data) {
+        if (!Array.isArray(data.enemies)) return;
+        enemies = data.enemies.filter(e =>
+          e && typeof e.netId === 'string' &&
+          Number.isFinite(e.x) && Number.isFinite(e.y) &&
+          Number.isFinite(e.hp)
+        ).map(e => ({ ...e, pinned: null, impaled: null }));
+        mpWorldRevision = Number(data.revision) || mpWorldRevision;
+      }
+
+      function mpSendWorld(dt) {
+        if (!MP.connected || !MP.isHost || !MP.socket ||
+            MP.socket.readyState !== WebSocket.OPEN) return;
+        mpWorldTimer += dt;
+        if (mpWorldTimer < 0.1) return;
+        mpWorldTimer = 0;
+
+        const snapshot = enemies.map(e => {
+          const out = { netId: e.netId || (e.netId = crypto.randomUUID()) };
+          for (const key of MP_WORLD_FIELDS) {
+            const value = e[key];
+            if (value === null || ['string','number','boolean'].includes(typeof value)) {
+              out[key] = value;
+            }
+          }
+          return out;
+        });
+
+        try {
+          MP.socket.send(JSON.stringify({
+            type: 'world-state',
+            revision: ++mpWorldRevision,
+            enemies: snapshot
+          }));
+        } catch (error) {
+          console.warn('[MP] Error sincronizando enemigos:', error);
+        }
+      }
+
       window.mpSyncUpdate = function(dt) {
         if (
           state === 'playing' &&
@@ -3307,6 +3367,8 @@ for (const remote of MP.remotePlayers.values()) {
             }
           }
         }
+
+        mpSendWorld(dt);
 
         if (!MP.remotePlayers) return;
 
