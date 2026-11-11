@@ -269,6 +269,12 @@
         if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Tab'].includes(e.code)) e.preventDefault();
         if (!keys[e.code]) pressed[e.code] = true;
         keys[e.code] = true;
+        if (e.code === 'KeyR' && MP && MP.connected && !MP.isHost && MP.socket && MP.socket.readyState === WebSocket.OPEN) {
+          const boss = enemies.find(q => q.boss && q.state === 'desp_lights' && Array.isArray(q.despLights));
+          if (boss) { const near = boss.despLights.map((q,i)=>({i,d:dist(P.x,P.y,q.x,q.y)})).filter(q=>q.d<65).sort((a,b)=>a.d-b.d)[0];
+            if (near) { try { MP.socket.send(JSON.stringify({type:'boss-light-interact',bossId:boss.netId,lightIndex:near.i,roomKey:mpRoomKey()})); } catch {} }
+          }
+        }
         AudioSys.init(); AudioSys.resume();
       });
       window.addEventListener('keyup', e => { keys[e.code] = false; });
@@ -705,7 +711,7 @@
         };
         const pool = (poolsByFloor[floorN] || poolsByFloor[8]).concat(loop >= 1 ? ['bomber', 'phantom'] : []);
         while (b > 0 && list.length < 500) { let t = pool[Math.floor(Math.random() * pool.length)]; if (b < ET[t].cost) t = 'stalker'; list.push(t); b -= ET[t].cost; }
-        if (loop >= 1) { const c = loop >= 3 ? 2 : (Math.random() < 0.55 ? 1 : 0); for (let i = 0; i < c; i++) list.push('mini'); }
+        if (floorN >= 3 || loop >= 1) { const c = loop >= 3 ? 2 : (floorN >= 3 && loop === 0 ? 1 : (Math.random() < 0.55 ? 1 : 0)); for (let i = 0; i < c; i++) list.push('mini'); }
         // Multiplicador exacto de cantidad: 2, 2.5 o 3 veces la oleada base.
         const baseWave = list.slice();
         const targetCount = Math.round(baseWave.length * enemyMultiplier);
@@ -4126,6 +4132,16 @@ maxRank = Math.max(maxRank, sr()); ambT -= dt; if (ambT <= 0) { ambT = rand(9, 2
             return;
           }
 
+          if (data.type === 'boss-light-interact' && MP.isHost && data.roomKey === mpRoomKey()) {
+            const boss=enemies.find(q=>q.boss && q.netId===data.bossId && q.state==='desp_lights' && Array.isArray(q.despLights));
+            const remote=MP.remotePlayers.get(data.id), index=Number(data.lightIndex);
+            if (boss && remote && Number.isInteger(index) && index>=0 && index<boss.despLights.length && dist(remote.x,remote.y,boss.despLights[index].x,boss.despLights[index].y)<75) {
+              const correct=boss.despLights.reduce((a,b)=>b.power>a.power?b:a,boss.despLights[0]);
+              if (boss.despLights[index]===correct) { boss.hp=0; boss.despLock=false; boss.despFinished=true; killEnemy(boss); }
+              else hurtEnemyTargetPlayer(remote,12,Math.atan2(remote.y-boss.y,remote.x-boss.x));
+            }
+            return;
+          }
           if (data.type === 'player-state' && data.id !== MP.id) {
             const x = Number(data.x);
             const y = Number(data.y);
@@ -4477,7 +4493,7 @@ maxRank = Math.max(maxRank, sr()); ambT -= dt; if (ambT <= 0) { ambT = rand(9, 2
         't','state','st','cd','side','sideT','pull','pullT','dead','boss','mini',
         'score','wanderT','wA','hitDone','cA','n','af','orbit','orbitT','phase',
         'shield','vuln','vulnT','parryT','dodgeT','dodgeA','reflect','ecd',
-        'vis','cam','amT','amInit','segT','bounty'
+        'vis','cam','amT','amInit','segT','bounty','phaseInvuln','despLock','despFinished','despStage','despTimer','escape','despY','despDir','rollA','rollN','despLights','damageMult'
       ];
       let mpWorldTimer = 0;
       let mpWorldRevision = 0;
@@ -4752,7 +4768,7 @@ maxRank = Math.max(maxRank, sr()); ambT -= dt; if (ambT <= 0) { ambT = rand(9, 2
         const snapshot = enemies.map(e => {
           const out = { netId: e.netId || (e.netId = crypto.randomUUID()) };
           for (const key of MP_WORLD_FIELDS) { const value = e[key]; if (value === null || ['string','number','boolean'].includes(typeof value)) out[key] = value; }
-          for (const key of ['tl','tt','zp','zl','seg']) if (Array.isArray(e[key])) out[key] = mpClone(e[key]);
+          for (const key of ['tl','tt','zp','zl','seg','despLights']) if (Array.isArray(e[key])) out[key] = mpClone(e[key]);
           return out;
         });
         const room = { key: mpRoomKey(), floorN, roomN, cellKey: cell ? cell.x + ',' + cell.y : null, dun: mpClone(dun), rs, introT, doorOpen, waveQueue: mpClone(waveQueue), obstacles: mpClone(obstacles), lights: mpClone(lights), feats: mpClone(feats), shopItems: mpClone(shopItems), secret: mpClone(secret), chest: mpClone(chest), exitPortal: mpClone(exitPortal), sidePortal: mpClone(sidePortal) };
