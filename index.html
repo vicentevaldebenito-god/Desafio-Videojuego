@@ -20,6 +20,7 @@
       display: flex;
       align-items: center;
       justify-content: center;
+      overscroll-behavior: none;
     }
 
     canvas {
@@ -28,6 +29,10 @@
       cursor: none;
       touch-action: none;
       box-shadow: 0 0 70px rgba(46, 230, 255, .12);
+    }
+    @media (pointer: coarse) {
+      html, body { touch-action: none; }
+      canvas { cursor: default; }
     }
   </style>
 </head>
@@ -59,6 +64,8 @@
 
       const canvas = document.getElementById('game');
       const ctx = canvas.getContext('2d');
+      const MOBILE = (('ontouchstart' in window) || navigator.maxTouchPoints > 0) &&
+        (window.matchMedia('(pointer: coarse)').matches || navigator.maxTouchPoints > 0);
       let scale = 1;
       function resize() {
         const k = Math.min(window.innerWidth / W, window.innerHeight / H);
@@ -112,6 +119,66 @@
          --------------------------------------------------------------------- */
       const keys = {}, pressed = {};
       const mouse = { x: W / 2, y: H / 2, l: false, r: false, lp: false, rp: false };
+      const touchPad = { moveId: null, specialId: null, interactId: null, joyX: 0, joyY: 0, active: false };
+      let mobileInteractPulse = false;
+      let wheelDir = 0;
+      function touchGamePoint(e) {
+        const r = canvas.getBoundingClientRect();
+        return { x: (e.clientX - r.left) * W / r.width, y: (e.clientY - r.top) * H / r.height };
+      }
+      function updateTouchMove(e) {
+        const p = touchGamePoint(e), dx = p.x - 142, dy = p.y - 578;
+        const len = Math.hypot(dx, dy), max = 68, k = len > max ? max / len : 1;
+        touchPad.joyX = dx * k / max; touchPad.joyY = dy * k / max;
+        touchPad.active = len > 8;
+        keys.KeyA = touchPad.joyX < -0.18; keys.KeyD = touchPad.joyX > 0.18;
+        keys.KeyW = touchPad.joyY < -0.18; keys.KeyS = touchPad.joyY > 0.18;
+      }
+      function clearTouchMove() {
+        touchPad.moveId = null; touchPad.joyX = touchPad.joyY = 0; touchPad.active = false;
+        keys.KeyA = keys.KeyD = keys.KeyW = keys.KeyS = false;
+      }
+      function drawTouchControls() {
+        if (!MOBILE || !P || !['playing','paused','upgrade','inv'].includes(state)) return;
+        ctx.save(); ctx.setTransform(scale, 0, 0, scale, 0, 0);
+        const circle = (x,y,r,fill,stroke) => { ctx.beginPath(); ctx.arc(x,y,r,0,TAU); ctx.fillStyle=fill; ctx.fill(); ctx.lineWidth=3; ctx.strokeStyle=stroke; ctx.stroke(); };
+        circle(142,578,82,'rgba(4,20,34,.38)','rgba(110,220,255,.30)');
+        circle(142 + touchPad.joyX*55,578 + touchPad.joyY*55,31,'rgba(46,230,255,.32)','rgba(150,235,255,.8)');
+        circle(1090,590,57,'rgba(125,255,106,.18)','rgba(125,255,106,.8)');
+        circle(1180,470,57,'rgba(46,230,255,.18)','rgba(46,230,255,.8)');
+        ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.font='bold 15px Arial';
+        ctx.fillStyle='#baffc8'; ctx.fillText('ESPECIAL',1090,590);
+        ctx.fillStyle='#b8f4ff'; ctx.fillText('USAR',1180,462); ctx.fillText('E',1180,484);
+        ctx.fillStyle='rgba(180,225,245,.72)'; ctx.font='12px Arial'; ctx.fillText('MOVER',142,682);
+        ctx.restore();
+      }
+      canvas.addEventListener('pointerdown', e => {
+        if (!MOBILE) return;
+        const p = touchGamePoint(e);
+        AudioSys.init(); AudioSys.resume();
+        if (p.x < 300 && p.y > 390 && touchPad.moveId === null) {
+          touchPad.moveId = e.pointerId; updateTouchMove(e);
+        } else if (p.x > 1015 && p.y > 520 && touchPad.specialId === null) {
+          touchPad.specialId = e.pointerId; pressed.KeyF = true;
+        } else if (p.x > 1090 && p.y > 385 && p.y <= 535 && touchPad.interactId === null) {
+          touchPad.interactId = e.pointerId; mouse.lp = true;
+        } else {
+          // Tocar el resto de la pantalla sirve para seleccionar menús y cartas.
+          mouse.x = p.x; mouse.y = p.y; mouse.lp = true;
+        }
+        e.preventDefault();
+      }, { passive:false });
+      canvas.addEventListener('pointermove', e => {
+        if (touchPad.moveId === e.pointerId) { updateTouchMove(e); e.preventDefault(); }
+      }, { passive:false });
+      const endTouchPointer = e => {
+        if (touchPad.moveId === e.pointerId) clearTouchMove();
+        if (touchPad.specialId === e.pointerId) { touchPad.specialId = null; }
+        if (touchPad.interactId === e.pointerId) touchPad.interactId = null;
+      };
+      canvas.addEventListener('pointerup', endTouchPointer);
+      canvas.addEventListener('pointercancel', endTouchPointer);
+      canvas.addEventListener('lostpointercapture', endTouchPointer);
       let wheelDir = 0;
       window.addEventListener('keydown', e => {
         const target = e.target;
@@ -933,7 +1000,21 @@
         const p = P;
         if (p.dead) { p.vx *= 0.9; p.vy *= 0.9; moveEntity(p, p.vx * dt, p.vy * dt, p.r); return; }
         const rm = reloadMult(), sm = speedMult();
-        p.angle = Math.atan2(mouse.y - p.y, mouse.x - p.x);
+        if (MOBILE) {
+          let target = null, targetD = 900;
+          for (const e of enemies) {
+            if (e.dead || e.spawnT > 0 || e.orbit > 0) continue;
+            const d = dist(p.x, p.y, e.x, e.y);
+            if (d < targetD) { target = e; targetD = d; }
+          }
+          if (target) {
+            p.angle = Math.atan2(target.y - p.y, target.x - p.x);
+            mouse.x = target.x; mouse.y = target.y; mouse.l = true;
+          } else {
+            mouse.l = false;
+            p.angle = Math.atan2(mouse.y - p.y, mouse.x - p.x);
+          }
+        } else p.angle = Math.atan2(mouse.y - p.y, mouse.x - p.x);
         p.iframes = Math.max(0, p.iframes - dt); p.flash = Math.max(0, p.flash - dt);
         p.dashCd = Math.max(0, p.dashCd - dt * rm);
         p.pressure = Math.max(0, p.pressure - 24 * dt * (p.overheat ? 0.8 : 1));
@@ -3472,6 +3553,7 @@ maxRank = Math.max(maxRank, sr()); ambT -= dt; if (ambT <= 0) { ambT = rand(9, 2
 
         try {
           render();
+          drawTouchControls();
         } catch (err) {
           if (!window.__rerr) {
             window.__rerr = 1;
@@ -3481,6 +3563,7 @@ maxRank = Math.max(maxRank, sr()); ambT -= dt; if (ambT <= 0) { ambT = rand(9, 2
         }
 
         for (const k in pressed) pressed[k] = false;
+        if (MOBILE) { pressed.KeyF = false; mouse.l = !!(state === 'playing' && P && !P.dead && enemies.some(e => !e.dead && e.spawnT <= 0 && dist(P.x,P.y,e.x,e.y) < 900)); }
         mouse.lp = false;
         mouse.rp = false;
         wheelDir = 0;
