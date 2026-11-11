@@ -1578,9 +1578,17 @@
         }
         pickups = pickups.filter(p => !p.got);
         if (secret && !secret.found && dist(secret.x, secret.y, P.x, P.y) < 30) {
-          secret.found = true; P.hp = Math.min(P.maxHp, P.hp + 30);
-          floatText('CACHÉ SECRETA +30 VIDA', secret.x, secret.y - 20, '#2ee6ff', 16);
-          boomFx(secret.x, secret.y, 60, '#2ee6ff'); AudioSys.sfx('upgrade');
+          if (MP && MP.connected && !MP.isHost) {
+            if (!MP.pendingSecretHeal) {
+              MP.pendingSecretHeal = true;
+              try { MP.socket.send(JSON.stringify({ type: 'secret-heal-request', playerId: MP.id, roomKey: mpRoomKey() })); }
+              catch { MP.pendingSecretHeal = false; }
+            }
+          } else {
+            secret.found = true; P.hp = Math.min(P.maxHp, P.hp + 30);
+            floatText('CACHÉ SECRETA +30 VIDA', secret.x, secret.y - 20, '#2ee6ff', 16);
+            boomFx(secret.x, secret.y, 60, '#2ee6ff'); AudioSys.sfx('upgrade');
+          }
         }
       }
 
@@ -3183,7 +3191,10 @@ for (const remote of MP.remotePlayers.values()) {
         reviveHelpingTarget: null,
         reviveProgressSendTimer: 0,
         reviveSendTimer: 0,
-        reviveLastSentTarget: null
+        reviveLastSentTarget: null,
+        pendingPickupIds: new Set(),
+        pendingFeatureIds: new Set(),
+        pendingSecretHeal: false
       };
 
       let mpOpen = false;
@@ -3540,7 +3551,86 @@ for (const remote of MP.remotePlayers.values()) {
           if (data.type === 'enemy-hit' && MP.isHost) {
             if (state !== 'playing') return;
             const target = enemies.find(e => e.netId === data.netId && !e.dead);
-            if (target && Number.isFinite(Number(data.damage))) hurtEnemy(target, Math.min(100000, Math.max(0, Number(data.damage))), { ...(data.options || {}), fromMP: true });
+            if (target && Number.isFinite(Number(data.damage))) {
+              const dealt = hurtEnemy(target, Math.min(100000, Math.max(0, Number(data.damage))), { ...(data.options || {}), fromMP: true });
+              if (dealt > 0) {
+                try { MP.socket.send(JSON.stringify({ type: 'enemy-damage', netId: target.netId, damage: dealt, hp: Math.max(0, target.hp), dead: !!target.dead, x: target.x, y: target.y, roomKey: mpRoomKey() })); } catch {}
+              }
+            }
+            return;
+          }
+          if (data.type === 'enemy-damage' && !MP.isHost) {
+            if (data.roomKey && data.roomKey !== mpRoomKey()) return;
+            const target = enemies.find(e => e.netId === data.netId);
+            if (target) {
+              target.hp = Math.max(0, Number(data.hp) || 0);
+              target.flash = 0.12;
+              if (Number(data.damage) > 0) {
+                floatText(Math.round(Number(data.damage)), Number(data.x) || target.x, (Number(data.y) || target.y) - target.r - 7, '#ffffff', 14);
+                spark(Number(data.x) || target.x, Number(data.y) || target.y, 4, '#d8f7ff', 180);
+                AudioSys.sfx('hit');
+              }
+              if (data.dead) target.dead = true;
+            }
+            return;
+          }
+          if (data.type === 'pickup-request' && MP.isHost) {
+            const player = MP.remotePlayers.get(data.playerId);
+            const item = pickups.find(p => p.mpId === data.pickupId && !p.got);
+            const valid = state === 'playing' && player && !player.dead && player.roomKey === mpRoomKey() &&
+              performance.now() - player.lastSeen < 1000 && item && dist(player.x, player.y, item.x, item.y) < 55 &&
+              (!data.roomKey || data.roomKey === mpRoomKey());
+            if (valid) item.got = true;
+            try { MP.socket.send(JSON.stringify({ type: 'pickup-result', playerId: data.playerId, pickupId: data.pickupId, accepted: !!valid, heal: valid ? Number(item.heal) || 0 : 0, roomKey: mpRoomKey() })); } catch {}
+            return;
+          }
+          if (data.type === 'plant-heal-request' && MP.isHost) {
+            const player = MP.remotePlayers.get(data.playerId);
+            const feature = feats.find(f => f.mpId === data.featureId && f.k === 'plant' && !f.used);
+            const valid = state === 'playing' && player && !player.dead && player.roomKey === mpRoomKey() &&
+              performance.now() - player.lastSeen < 1000 && feature && dist(player.x, player.y, feature.x, feature.y) < 65 &&
+              (!data.roomKey || data.roomKey === mpRoomKey());
+            if (valid) feature.used = true;
+            try { MP.socket.send(JSON.stringify({ type: 'plant-heal-result', playerId: data.playerId, featureId: data.featureId, accepted: !!valid, heal: valid ? (Number(player.maxHp) || 100) * 0.15 : 0, roomKey: mpRoomKey() })); } catch {}
+            return;
+          }
+          if (data.type === 'secret-heal-request' && MP.isHost) {
+            const player = MP.remotePlayers.get(data.playerId);
+            const valid = state === 'playing' && player && !player.dead && player.roomKey === mpRoomKey() &&
+              performance.now() - player.lastSeen < 1000 && secret && !secret.found &&
+              dist(player.x, player.y, secret.x, secret.y) < 48 &&
+              (!data.roomKey || data.roomKey === mpRoomKey());
+            if (valid) secret.found = true;
+            try { MP.socket.send(JSON.stringify({ type: 'secret-heal-result', playerId: data.playerId, accepted: !!valid, heal: valid ? 30 : 0, roomKey: mpRoomKey() })); } catch {}
+            return;
+          }
+          if (data.type === 'pickup-result' && data.playerId === MP.id) {
+            if (data.roomKey && data.roomKey !== mpRoomKey()) return;
+            MP.pendingPickupIds.delete(data.pickupId);
+            if (data.accepted && Number(data.heal) > 0 && !P.dead) {
+              P.hp = Math.min(P.maxHp, P.hp + Number(data.heal));
+              floatText('+' + Number(data.heal), P.x, P.y - 28, '#7dff6a', 15);
+              spark(P.x, P.y, 6, '#7dff6a', 200); AudioSys.sfx('pickup');
+            }
+            return;
+          }
+          if (data.type === 'plant-heal-result' && data.playerId === MP.id) {
+            if (data.roomKey && data.roomKey !== mpRoomKey()) return;
+            MP.pendingFeatureIds.delete(data.featureId);
+            if (data.accepted && Number(data.heal) > 0 && !P.dead) {
+              P.hp = Math.min(P.maxHp, P.hp + Number(data.heal));
+              floatText('+VIDA', P.x, P.y - 30, '#7dff6a', 14); AudioSys.sfx('coin');
+            }
+            return;
+          }
+          if (data.type === 'secret-heal-result' && data.playerId === MP.id) {
+            if (data.roomKey && data.roomKey !== mpRoomKey()) return;
+            MP.pendingSecretHeal = false;
+            if (data.accepted && Number(data.heal) > 0 && !P.dead) {
+              P.hp = Math.min(P.maxHp, P.hp + Number(data.heal));
+              floatText('CACHÉ SECRETA +30 VIDA', P.x, P.y - 20, '#2ee6ff', 16);
+              boomFx(P.x, P.y, 60, '#2ee6ff'); AudioSys.sfx('upgrade');
+            }
             return;
           }
           if (data.type === 'xp-request' && MP.isHost) {
@@ -3796,7 +3886,16 @@ for (const remote of MP.remotePlayers.values()) {
             });
         }
         if (Array.isArray(data.ebullets)) ebullets = mpClone(data.ebullets) || [];
-        if (Array.isArray(data.pickups)) pickups = mpClone(data.pickups) || [];
+        if (Array.isArray(data.pickups)) {
+          const previousPickups = new Map(pickups.map(p => [p.mpId, p]));
+          pickups = data.pickups.map(incoming => {
+            const old = previousPickups.get(incoming.mpId);
+            if (!old) return incoming;
+            Object.assign(old, incoming);
+            return old;
+          });
+          for (const id of [...MP.pendingPickupIds]) if (!pickups.some(p => p.mpId === id)) MP.pendingPickupIds.delete(id);
+        }
         if (Array.isArray(data.orbs)) orbs = mpClone(data.orbs) || [];
         if (Number.isFinite(data.xp)) xp = data.xp;
         if (Number.isFinite(data.level)) level = data.level;
