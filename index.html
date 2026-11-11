@@ -4032,7 +4032,7 @@ for (const remote of MP.remotePlayers.values()) {
             }
           }
 
-          MP.sharedLocked = state === 'paused' || state === 'upgrade' || state === 'shop' || state === 'class' || state === 'lock';
+          MP.sharedLocked = incomingState === 'paused' || incomingState === 'upgrade' || incomingState === 'shop' || incomingState === 'class' || incomingState === 'lock';
         }
         // Solo el anfitrión utiliza sus propias cartas; nunca se copian al invitado.
         mpWorldRevision = Number(data.revision) || mpWorldRevision;
