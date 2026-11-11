@@ -1055,7 +1055,7 @@
       }
 
       function updateEnemy(e, dt) {
-        const target = mpNearestEnemyTarget(e) || target;
+        const target = mpNearestEnemyTarget(e) || P;
         e.t += dt;
         if (e.spawnT > 0) { e.spawnT -= dt; if (e.spawnT <= 0) { ring(e.x, e.y, e.r * 3, ET[e.type].color, 0.35, 3); spark(e.x, e.y, 10, ET[e.type].color, 250); if (e.boss) bossEntrance(e); } return; }
         e.flash = Math.max(0, e.flash - dt); e.hitCd = Math.max(0, e.hitCd - dt); e.sideT = Math.max(0, e.sideT - dt);
