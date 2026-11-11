@@ -143,6 +143,10 @@
         if (!MOBILE || !P || !['playing','paused','upgrade','inv'].includes(state)) return;
         ctx.save(); ctx.setTransform(scale, 0, 0, scale, 0, 0);
         const circle = (x,y,r,fill,stroke) => { ctx.beginPath(); ctx.arc(x,y,r,0,TAU); ctx.fillStyle=fill; ctx.fill(); ctx.lineWidth=3; ctx.strokeStyle=stroke; ctx.stroke(); };
+        // Acceso rápido a pantalla completa, siempre visible durante la partida.
+        circle(1220,48,27,'rgba(46,230,255,.14)','rgba(46,230,255,.65)');
+        ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.font='bold 18px Arial';
+        ctx.fillStyle='#b8f4ff'; ctx.fillText(document.fullscreenElement ? '×' : '⛶',1220,48);
         circle(142,578,82,'rgba(4,20,34,.38)','rgba(110,220,255,.30)');
         circle(142 + touchPad.joyX*55,578 + touchPad.joyY*55,31,'rgba(46,230,255,.32)','rgba(150,235,255,.8)');
         circle(970,590,51,'rgba(255,177,59,.18)','rgba(255,177,59,.85)');
@@ -159,7 +163,16 @@
         if (!MOBILE) return;
         const p = touchGamePoint(e);
         AudioSys.init(); AudioSys.resume();
-        if (p.x < 300 && p.y > 390 && touchPad.moveId === null) {
+        if (p.x > 1178 && p.y < 88) {
+          if (!document.fullscreenElement) {
+            const enterFullscreen = document.documentElement.requestFullscreen || canvas.requestFullscreen;
+            if (enterFullscreen) {
+              try { const result = enterFullscreen.call(document.documentElement.requestFullscreen ? document.documentElement : canvas); if (result && result.catch) result.catch(() => {}); } catch (_) {}
+            }
+          } else if (document.exitFullscreen) {
+            try { const result = document.exitFullscreen(); if (result && result.catch) result.catch(() => {}); } catch (_) {}
+          }
+        } else if (p.x < 300 && p.y > 390 && touchPad.moveId === null) {
           touchPad.moveId = e.pointerId; updateTouchMove(e);
         } else if (p.x > 900 && p.x <= 1035 && p.y > 520 && touchPad.dashId === null) {
           touchPad.dashId = e.pointerId; pressed.Space = true;
