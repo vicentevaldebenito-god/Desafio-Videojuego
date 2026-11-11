@@ -2961,6 +2961,8 @@ for (const remote of MP.remotePlayers.values()) {
         id: crypto.randomUUID(),
         players: 0,
         connected: false,
+        hostId: null,
+        isHost: false,
         remotePlayers: new Map(),
         syncTimer: 0
       };
@@ -3137,6 +3139,8 @@ for (const remote of MP.remotePlayers.values()) {
 
         MP.connected = false;
         MP.players = 0;
+        MP.hostId = null;
+        MP.isHost = false;
         MP.room = code;
         MP.remotePlayers.clear();
         MP.syncTimer = 0;
@@ -3215,19 +3219,36 @@ for (const remote of MP.remotePlayers.values()) {
           }
 
           if (data.type === "welcome") {
-            MP.players = data.players;
+            if (data.id) MP.id = data.id;
+            MP.hostId = data.hostId || null;
+            MP.isHost = !!data.isHost || MP.id === MP.hostId;
+            MP.players = Number(data.players) || 1;
             mpUpdateCount();
-            mpMessage("CONECTADO A LA SALA");
+            mpMessage(MP.isHost ? "SALA CREADA · ERES ANFITRIÓN" : "CONECTADO A LA SALA");
           }
 
           if (data.type === "player-joined") {
-            MP.players = Math.min(4, MP.players + 1);
+            MP.hostId = data.hostId || MP.hostId;
+            MP.isHost = MP.id === MP.hostId;
+            MP.players = Number.isFinite(Number(data.players))
+              ? Number(data.players)
+              : Math.min(4, MP.players + 1);
             mpUpdateCount();
           }
 
           if (data.type === "player-left") {
-            MP.players = Math.max(0, MP.players - 1);
+            MP.hostId = data.hostId || null;
+            MP.isHost = MP.id === MP.hostId;
+            MP.players = Number.isFinite(Number(data.players))
+              ? Number(data.players)
+              : Math.max(0, MP.players - 1);
             mpUpdateCount();
+          }
+
+          if (data.type === "host-changed") {
+            MP.hostId = data.hostId || null;
+            MP.isHost = MP.id === MP.hostId;
+            mpMessage(MP.isHost ? "AHORA ERES EL ANFITRIÓN" : "ANFITRIÓN ACTUALIZADO");
           }
         };
 
@@ -3240,6 +3261,8 @@ for (const remote of MP.remotePlayers.values()) {
 
           MP.connected = false;
           MP.players = 0;
+          MP.hostId = null;
+          MP.isHost = false;
           MP.remotePlayers.clear();
           mpUpdateCount();
           mpMessage("DESCONECTADO");
