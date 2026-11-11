@@ -975,7 +975,7 @@
         }
         let og = e.boss ? 12 : e.mini ? 8 : (Math.random() < (0.3 + 0.2 * chm('greed')) * (1 + 0.5 * style / 100) * (1 + 0.15 * cfg.pres) ? 1 : 0);
         og *= 3; if (og) { AudioSys.sfx('coin'); organs += og; floatText('+' + og + ' ÓRGANO', e.x, e.y - e.r - 28, '#ff8fa3', 12); }
-        if (e.mini) { pend++; level++; xpNeed = Math.round(xpNeed * 1.25); if (level % 5 === 0) cpend++; banner = { t: 2.6, max: 2.6, l1: '¡MINIJEFE DERROTADO!', l2: 'Subes un nivel' }; AudioSys.sfx('upgrade'); }
+        if (e.mini) { pend++; level++; xpNeed = Math.round(xpNeed * 1.25); if (level === 5 || level === 10 || level === 20) cpend++; banner = { t: 2.6, max: 2.6, l1: '¡MINIJEFE DERROTADO!', l2: 'Subes un nivel' }; AudioSys.sfx('upgrade'); }
         const lc = has('leech') + 2 * chm('vamp');
         if (lc > 0 && !P.dead) { P.hp = Math.min(P.maxHp, P.hp + 3 * lc); floatText('+' + 3 * lc, P.x, P.y - 28, '#c46bff', 13); }
 
@@ -1614,7 +1614,7 @@
       function goDoor(o) { if (MP && MP.connected && !MP.isHost) return; cell = o.n; cell.visited = true; roomN = Math.max(1, cell.d); startRoom(); const m = 90; if (o.d === 'u') { P.x = W / 2; P.y = H - WALL - m; } else if (o.d === 'd') { P.x = W / 2; P.y = WALL + m; } else if (o.d === 'l') { P.x = W - WALL - m; P.y = H / 2; } else { P.x = WALL + m; P.y = H / 2; } }
       function revealSecrets() { for (const d of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const n = dun.cells[(cell.x + d[0]) + ',' + (cell.y + d[1])]; if (n && n.type === 'secret' && !n.rev) { n.rev = true; floatText('¡UNA GRIETA SE ABRE!', W / 2, H / 2, '#2ee6ff', 18); AudioSys.sfx('rankup'); } } }
       function nextSector() { if (MP && MP.connected && !MP.isHost) return; floorN++; if (floorN > FLOORS) { if (infinite) { floorN = 1; loop++; } else { floorN = FLOORS; endRun(true); return; } } roomN = 1; genDungeon(); startRoom(); }
-      function addXP(n) { if (MP && MP.connected && !MP.isHost) { if (MP.socket && MP.socket.readyState === WebSocket.OPEN) MP.socket.send(JSON.stringify({ type: 'xp-request', amount: Math.max(0, Number(n) || 0) })); return; } xp += n * P.st.xp * (1 + 0.2 * style / 100) * (1 + 0.5 * (floorN - 1) + loop) * (1 + 0.2 * cfg.pres) * 2; while (xp >= xpNeed) { xp -= xpNeed; level++; xpNeed = Math.round(xpNeed * 1.25); pend++; if (level % 5 === 0) cpend++; } }
+      function addXP(n) { if (MP && MP.connected && !MP.isHost) { if (MP.socket && MP.socket.readyState === WebSocket.OPEN) MP.socket.send(JSON.stringify({ type: 'xp-request', amount: Math.max(0, Number(n) || 0) })); return; } xp += n * P.st.xp * (1 + 0.2 * style / 100) * (1 + 0.5 * (floorN - 1) + loop) * (1 + 0.2 * cfg.pres) * 2; while (xp >= xpNeed) { xp -= xpNeed; level++; xpNeed = Math.round(xpNeed * 1.25); pend++; if (level === 5 || level === 10 || level === 20) cpend++; } }
       const STATS = [
         { id: 's_dmg', k: 'dmg', name: 'DAÑO BRUTAL', label: 'Daño', base: 0.12, art: 'implo', icon: 'burst' },
         { id: 's_rate', k: 'rate', name: 'CADENCIA FRENÉTICA', label: 'Cadencia', base: 0.10, art: 'adren', icon: 'pulse' },
@@ -1771,7 +1771,11 @@
       }
       function updateInv(dt) {
         if (pressed.Digit1) invSlot = 0; if (pressed.Digit2) invSlot = 1;
-        if (pressed.Escape && !invPick) { state = 'playing'; return; }
+        if ((pressed.Escape || pressed.Tab)) {
+          state = MP.pendingClassMenu ? 'class' : 'playing';
+          if (MP.pendingClassMenu) { MP.pendingClassMenu = false; MP.localClassOpen = true; }
+          return;
+        }
         if (!mouse.lp) return;
         const hit = (x, y, w, h) => mouse.x > x && mouse.x < x + w && mouse.y > y && mouse.y < y + h;
         for (let i = 0; i < 2; i++) { const [x, y, w, h] = invRect(i); if (hit(x, y, w, h)) { if (invPick) { P.slots[i] = invPick; invPick = null; P.weapon = i; AudioSys.sfx('upgrade'); } invSlot = i; return; } }
@@ -1901,10 +1905,18 @@
         [{ n: 'CURA POTENTE', d: 'F cura un 15% más por nivel y se recarga 3 s antes.' }, { n: 'PROTECTOR', d: 'F además te da +1 escudo y 1 s de invulnerabilidad por nivel.' }]
       ];
       function updateClass() {
-        for (let i = 0; i < 2; i++) if (pressed['Digit' + (i + 1)] || (mouse.lp && mouse.x > 200 + i * 450 && mouse.x < 620 + i * 450 && mouse.y > 200 && mouse.y < 560)) { P.path = i ? 'B' : 'A'; P.tier = 1; state = 'playing'; AudioSys.sfx('upgrade'); banner = { t: 2.6, max: 2.6, l1: 'RUTA ELEGIDA', l2: CPATH[P.char][i].n }; return; }
+        for (let i = 0; i < 2; i++) if (pressed['Digit' + (i + 1)] || (mouse.lp && mouse.x > 200 + i * 450 && mouse.x < 620 + i * 450 && mouse.y > 200 && mouse.y < 560)) {
+          P.path = i ? 'B' : 'A'; P.tier = level >= 20 ? 3 : level >= 10 ? 2 : 1;
+          if (MP && MP.connected && !MP.isHost) {
+            MP.localClassDone = true; MP.localClassOpen = false;
+            MP.localClassMilestones = new Set([10,20].filter(v => level >= v));
+          }
+          state = 'playing'; AudioSys.sfx('upgrade');
+          banner = { t: 2.6, max: 2.6, l1: 'RUTA ELEGIDA', l2: CPATH[P.char][i].n + ' · RANGO ' + P.tier }; return;
+        }
       }
       function drawClass() {
-        dim(0.9); const c = CHARS[P.char]; txt('MEJORA DE CLASE · ' + c.n, W / 2, 110, 34, c.col, 'center', 14); txt('Elige UNA ruta: se queda para siempre y mejora cada 5 niveles · 1 / 2 o clic', W / 2, 146, 15, '#cfe0f0', 'center');
+        dim(0.9); const c = CHARS[P.char]; txt('MEJORA DE CLASE · ' + c.n, W / 2, 110, 34, c.col, 'center', 14); txt('Elige UNA ruta · Rango II en nivel 10 · Rango III en nivel 20 · 1 / 2 o clic', W / 2, 146, 15, '#cfe0f0', 'center');
         CPATH[P.char].forEach((p, i) => { const x = 200 + i * 450, hov = mouse.x > x && mouse.x < x + 420 && mouse.y > 200 && mouse.y < 560; ctx.fillStyle = 'rgba(8,24,40,.95)'; ctx.fillRect(x, 200, 420, 360); ctx.strokeStyle = c.col; ctx.lineWidth = hov ? 4 : 2; ctx.strokeRect(x, 200, 420, 360); ctx.fillStyle = c.col + '22'; ctx.fillRect(x, 200, 420, 90); txt('RUTA ' + (i ? 'B' : 'A') + '  [' + (i + 1) + ']', x + 20, 236, 14, '#8fb8d8', 'left'); txt(p.n, x + 20, 274, 26, c.col, 'left', 8); wrap(p.d, 380, 17).forEach((l, k) => txt(l, x + 20, 340 + k * 26, 17, '#e6f2ff', 'left')); });
       }
       function roomLogic(dt) {
@@ -2040,16 +2052,34 @@
         else if (floorN === 2) { ring(e.x, e.y, 240, '#ffd23f', 0.5, 8); shake(24); if (dist(e.x, e.y, P.x, P.y) < 240) hurtPlayer(25, Math.atan2(P.y - e.y, P.x - e.x)); }
         else { for (let i = 0; i < 28; i++) enemyShoot(e, i * TAU / 28, 210, 10, false); ring(e.x, e.y, 500, '#e8ff4a', 0.9, 4); shake(26); }
       }
+      function applyShopPurchase(item) {
+        if (!item || !item.c || !P) return;
+        const id = item.c.id;
+        P.ch[id] = chm(id) + 1;
+        if (item.c.weapon && !P.arms.includes(id)) { P.arms.push(id); invPick = id; invSlot = P.weapon; state = 'inv'; }
+        if (id === 'whet') { P.wl = P.wl || {}; const wid = P.slots[P.weapon]; P.wl[wid] = Math.min(3, (P.wl[wid] || 0) + 1); }
+        if (id === 'rrup') P.rr = (P.rr || 0) + 2;
+        if (id === 'rrsh') P.rs = (P.rs || 0) + 2;
+        if (id === 'vital') { P.maxHp += 60; P.hp = P.maxHp; }
+        AudioSys.sfx('upgrade'); floatText('COMPRADO: ' + item.c.name, P.x, P.y - 34, item.c.col || '#7dff6a', 14);
+      }
       function shopLogic() {
-        if (pressed.KeyT && P.rs > 0) { P.rs--; setupShop(); return; }
-        shopNear = null; for (const it of shopItems) if (dist(P.x, P.y, it.x, it.y) < 70) shopNear = it;
+        if (pressed.KeyT && P.rs > 0 && (!MP.connected || MP.isHost)) { P.rs--; setupShop(); return; }
+        shopNear = null;
+        for (const it of shopItems) if (dist(P.x, P.y, it.x, it.y) < 70) shopNear = it;
         shopExit = dist(P.x, P.y, W / 2, WALL + 46) < 60;
-        if (!pressed.KeyR) return;
-        const n = shopNear;
-        if (n && !n.sold) {
-          if (organs >= n.price) { organs -= n.price; n.sold = true; octoSay(['Un buen trato... para ambos.', 'Llévatelo antes de que me arrepienta.', 'Tus órganos son deliciosos... digo, gracias.'][Math.floor(Math.random() * 3)], 1.2, 'coin'); P.ch[n.c.id] = chm(n.c.id) + 1; if (n.c.weapon) { P.arms.push(n.c.id); invPick = n.c.id; invSlot = P.weapon; state = 'inv'; } if (n.c.id === 'whet') { P.wl = P.wl || {}; const wid = P.slots[P.weapon]; P.wl[wid] = Math.min(3, (P.wl[wid] || 0) + 1); octoSay('Ese filo cortará mejor, buzo...', 1, 'coin'); } if (n.c.id === 'rrup') P.rr = (P.rr || 0) + 2; if (n.c.id === 'rrsh') P.rs = (P.rs || 0) + 2; if (n.c.id === 'vital') { P.maxHp += 60; P.hp = P.maxHp; } AudioSys.sfx('upgrade'); }
-          else { floatText('No te alcanzan los órganos', P.x, P.y - 30, '#ff5a5a', 14); octoSay('Sin órganos no hay trato... vuelve con más.', 0, 'parryfail'); }
+        if (!pressed.KeyR || !shopNear || shopNear.sold) return;
+        if (MP && MP.connected && !MP.isHost) {
+          if (MP.pendingShopItem) return;
+          MP.pendingShopItem = shopNear.c.id;
+          try { MP.socket.send(JSON.stringify({ type: 'shop-buy-request', playerId: MP.id, itemId: shopNear.c.id, roomKey: mpRoomKey() })); }
+          catch { MP.pendingShopItem = null; }
+          return;
         }
+        if (organs >= shopNear.price) {
+          organs -= shopNear.price; shopNear.sold = true; applyShopPurchase(shopNear);
+          octoSay(['Un buen trato... para ambos.', 'Llévatelo antes de que me arrepienta.', 'Tus órganos son deliciosos... digo, gracias.'][Math.floor(Math.random() * 3)], 1.2, 'coin');
+        } else { floatText('No te alcanzan los órganos', P.x, P.y - 30, '#ff5a5a', 14); octoSay('Sin órganos no hay trato... vuelve con más.', 0, 'parryfail'); }
       }
       function hudExtra() {
         txt('ÓRGANOS ' + organs, W - 24, 168, 14, '#ff8fa3', 'right');
@@ -2184,11 +2214,20 @@
         }
         abyssT += dt; if (!hunter && abyssT > 900) { abyssT = 840; hunter = { x: Math.random() < 0.5 ? WALL : W - WALL, y: rand(WALL, H - WALL), cd: 0, t: 0, warn: 2.5 }; banner = { t: 2.6, max: 2.6, l1: 'ALGO TE ESTÁ CAZANDO', l2: 'El Acechador huele tu demora' }; AudioSys.sfx('roar'); }
         if (hunter) { hunter.t += dt; if (hunter.warn > 0) hunter.warn -= dt; else { const ha = Math.atan2(P.y - hunter.y, P.x - hunter.x), hs = 190 + 20 * floorN; hunter.x += Math.cos(ha) * hs * dt; hunter.y += Math.sin(ha) * hs * dt; hunter.cd -= dt; if (hunter.cd <= 0 && dist(P.x, P.y, hunter.x, hunter.y) < 46 + P.r) { hurtPlayer(25, ha); hunter.cd = 1; } if (hunter.t > 45) hunter = null; } } maxRank = Math.max(maxRank, sr()); ambT -= dt; if (ambT <= 0) { ambT = rand(9, 20); AudioSys.sfx(['whale', 'creak', 'drip'][Math.floor(Math.random() * 3)]); } for (const q of enemies) if (q.af === 'regen' && !q.dead) q.hp = Math.min(q.maxHp, q.hp + q.maxHp * 0.04 * dt); if (current && !P.dead) moveEntity(P, Math.cos(current.a) * current.f * dt, Math.sin(current.a) * current.f * dt, P.r); octo.happy = Math.max(0, octo.happy - dt); octo.sayT -= dt; for (const q of styleFeed) q.life -= dt; styleFeed = styleFeed.filter(q => q.life > 0); for (const q of enemies) if (q.mini || q.boss) { q.pinned = null; q.impaled = null; q.pull = false; q.stun = 0; } if ((!MP.connected || MP.isHost) && pend > 0 && !P.dead) { pend--; openUpgrades(); }
-        if ((!MP.connected || MP.isHost) && cpend > 0 && state === 'playing' && !P.dead) { cpend--; if (!P.path) { state = 'class'; AudioSys.sfx('upgrade'); } else { P.tier++; banner = { t: 2.6, max: 2.6, l1: 'MEJORA DE CLASE', l2: CPATH[P.char][P.path === 'A' ? 0 : 1].n + ' · nivel ' + P.tier }; AudioSys.sfx('upgrade'); } }
+        if ((!MP.connected || MP.isHost) && cpend > 0 && state === 'playing' && !P.dead) {
+          cpend--;
+          if (!P.path) { state = 'class'; AudioSys.sfx('upgrade'); }
+          else {
+            P.tier = level >= 20 ? 3 : level >= 10 ? 2 : Math.max(1, P.tier + 1);
+            banner = { t: 2.6, max: 2.6, l1: 'MEJORA DE CLASE', l2: CPATH[P.char][P.path === 'A' ? 0 : 1].n + ' · RANGO ' + P.tier };
+            AudioSys.sfx('upgrade');
+          }
+        }
         if (P.invT > 0) { P.invT -= dt; P.iframes = Math.max(P.iframes, 0.1); if (P.invT <= 0) P.vulnT = 5; } if (P.vulnT > 0) P.vulnT -= dt;
         stillT = Math.hypot(P.vx, P.vy) < 8 ? stillT + dt : 0; if (chm('still') && stillT > 1.5 && P.shield < 1 + chm('still')) { P.shield++; stillT = 0; ring(P.x, P.y, 50, '#7ad7ff', 0.3, 3); AudioSys.sfx('rankup'); }
         streakT -= dt; if (streakT <= 0) streak = 0; style = Math.max(0, style - dt * (3 + sr() * 2.5)); introDark = Math.max(0, introDark - dt);
         if (!MP.connected || MP.isHost) roomLogic(dt);
+        else if (rs === 'shop') shopLogic();
         updateEnemies(dt);
         updateBullets(dt); updateEBullets(dt);
         updateClouds(dt); updatePools(dt); updateFlares(dt); updatePickups(dt);
@@ -2220,8 +2259,14 @@
 
       function update(dt) {
         // El invitado queda completamente congelado hasta que el anfitrión reanude.
-        if (MP && MP.connected && !MP.isHost && MP.sharedLocked && state !== 'upgrade') return;
-        if (pressed.Tab && P && !P.dead && (state === 'playing' || (state === 'inv' && !invPick))) { state = state === 'inv' ? 'playing' : 'inv'; AudioSys.sfx('invopen'); }
+        if (MP && MP.connected && !MP.isHost && MP.sharedLocked &&
+            !['upgrade','class','inv'].includes(state)) return;
+        if (pressed.Tab && P && !P.dead && (state === 'playing' || state === 'inv')) {
+          const closing = state === 'inv';
+          state = closing ? 'playing' : 'inv';
+          if (closing && MP.pendingClassMenu) { state = 'class'; MP.pendingClassMenu = false; MP.localClassOpen = true; }
+          AudioSys.sfx('invopen');
+        }
         time += dt;
         if (pressed.KeyM) AudioSys.toggleMute();
         for (const m of motes) { m.x += Math.sin(time * m.sp + m.ph) * 8 * dt; m.y -= m.v * dt; if (m.y < -10) { m.y = H + 10; m.x = rand(0, W); } }
@@ -3194,7 +3239,12 @@ for (const remote of MP.remotePlayers.values()) {
         reviveLastSentTarget: null,
         pendingPickupIds: new Set(),
         pendingFeatureIds: new Set(),
-        pendingSecretHeal: false
+        pendingSecretHeal: false,
+        pendingShopItem: null,
+        localClassOpen: false,
+        localClassDone: false,
+        pendingClassMenu: false,
+        localClassMilestones: new Set()
       };
 
       let mpOpen = false;
@@ -3633,6 +3683,26 @@ for (const remote of MP.remotePlayers.values()) {
             }
             return;
           }
+          if (data.type === 'shop-buy-request' && MP.isHost) {
+            const player = MP.remotePlayers.get(data.playerId);
+            const item = shopItems.find(q => q.c && q.c.id === data.itemId && !q.sold);
+            const valid = state === 'playing' && rs === 'shop' && player && !player.dead &&
+              player.roomKey === mpRoomKey() && performance.now() - player.lastSeen < 1000 &&
+              item && dist(player.x, player.y, item.x, item.y) < 95 &&
+              (!data.roomKey || data.roomKey === mpRoomKey()) && organs >= item.price;
+            if (valid) { organs -= item.price; item.sold = true; }
+            try { MP.socket.send(JSON.stringify({ type: 'shop-buy-result', playerId: data.playerId, itemId: data.itemId, accepted: !!valid, organs, roomKey: mpRoomKey() })); } catch {}
+            return;
+          }
+          if (data.type === 'shop-buy-result' && data.playerId === MP.id) {
+            if (data.roomKey && data.roomKey !== mpRoomKey()) return;
+            MP.pendingShopItem = null;
+            if (data.accepted) {
+              const item = shopItems.find(q => q.c && q.c.id === data.itemId);
+              if (item) { item.sold = true; applyShopPurchase(item); }
+            } else floatText('COMPRA NO DISPONIBLE', P.x, P.y - 30, '#ff5a5a', 13);
+            return;
+          }
           if (data.type === 'xp-request' && MP.isHost) {
             if (state !== 'playing') return;
             const amount = Math.min(10000, Math.max(0, Number(data.amount) || 0));
@@ -3711,7 +3781,8 @@ for (const remote of MP.remotePlayers.values()) {
         'flash','slow','burn','blind','marked','stun','corrode','corrodeT','hitCd',
         't','state','st','cd','side','sideT','pull','pullT','dead','boss','mini',
         'score','wanderT','wA','hitDone','cA','n','af','orbit','orbitT','phase',
-        'shield','vuln','vulnT','parryT','dodgeT','dodgeA','reflect','ecd'
+        'shield','vuln','vulnT','parryT','dodgeT','dodgeA','reflect','ecd',
+        'vis','cam','amT','amInit','segT'
       ];
       let mpWorldTimer = 0;
       let mpWorldRevision = 0;
@@ -3865,6 +3936,7 @@ for (const remote of MP.remotePlayers.values()) {
           if (r.obstacles) obstacles = mpClone(r.obstacles);
           if (r.lights) lights = mpClone(r.lights);
           if (r.feats) feats = mpClone(r.feats);
+          if (Array.isArray(r.shopItems)) shopItems = mpClone(r.shopItems);
           if (r.secret !== undefined) secret = mpClone(r.secret);
           if (r.chest !== undefined) chest = mpClone(r.chest);
           if (r.exitPortal !== undefined) exitPortal = mpClone(r.exitPortal);
@@ -3898,7 +3970,17 @@ for (const remote of MP.remotePlayers.values()) {
         }
         if (Array.isArray(data.orbs)) orbs = mpClone(data.orbs) || [];
         if (Number.isFinite(data.xp)) xp = data.xp;
+        const previousSyncedLevel = level;
         if (Number.isFinite(data.level)) level = data.level;
+        if (!MP.isHost && P && P.path) {
+          for (const milestone of [10, 20]) {
+            if (previousSyncedLevel < milestone && level >= milestone && !MP.localClassMilestones.has(milestone)) {
+              MP.localClassMilestones.add(milestone); P.tier = milestone === 10 ? 2 : 3;
+              banner = { t: 2.8, max: 2.8, l1: 'MEJORA DE CLASE', l2: CPATH[P.char][P.path === 'A' ? 0 : 1].n + ' · RANGO ' + P.tier };
+              AudioSys.sfx('upgrade');
+            }
+          }
+        }
         if (Number.isFinite(data.xpNeed)) xpNeed = data.xpNeed;
         if (Number.isFinite(data.organs)) organs = data.organs;
         if (Number.isFinite(data.pend)) pend = data.pend;
@@ -3910,7 +3992,16 @@ for (const remote of MP.remotePlayers.values()) {
         if (typeof data.gameState === 'string' && ['playing', 'paused', 'upgrade', 'shop', 'class', 'lock', 'dive', 'gameover', 'victory'].includes(data.gameState)) {
           const incomingState = data.gameState;
 
-          if (!MP.isHost && incomingState === 'upgrade') {
+          if (!MP.isHost && state === 'inv' && (incomingState === 'playing' || incomingState === 'class')) {
+            if (incomingState === 'class') MP.pendingClassMenu = true;
+            state = 'inv';
+          } else if (!MP.isHost && incomingState === 'class') {
+            MP.localClassOpen = true; state = MP.localClassDone ? 'playing' : 'class';
+          } else if (!MP.isHost && incomingState === 'playing' && MP.localClassOpen && !MP.localClassDone) {
+            state = 'class';
+          } else if (!MP.isHost && incomingState === 'playing' && MP.localClassDone) {
+            state = 'playing'; MP.localClassDone = false; MP.localClassOpen = false;
+          } else if (!MP.isHost && incomingState === 'upgrade') {
             if (!MP.localUpgradeOpen || (!MP.localUpgradeDone && (!Array.isArray(cards) || cards.length !== 3))) {
               MP.localUpgradeOpen = true;
               MP.localUpgradeDone = false;
@@ -3955,9 +4046,10 @@ for (const remote of MP.remotePlayers.values()) {
         const snapshot = enemies.map(e => {
           const out = { netId: e.netId || (e.netId = crypto.randomUUID()) };
           for (const key of MP_WORLD_FIELDS) { const value = e[key]; if (value === null || ['string','number','boolean'].includes(typeof value)) out[key] = value; }
+          for (const key of ['tl','tt','zp','zl','seg']) if (Array.isArray(e[key])) out[key] = mpClone(e[key]);
           return out;
         });
-        const room = { key: mpRoomKey(), floorN, roomN, cellKey: cell ? cell.x + ',' + cell.y : null, dun: mpClone(dun), rs, introT, doorOpen, waveQueue: mpClone(waveQueue), obstacles: mpClone(obstacles), lights: mpClone(lights), feats: mpClone(feats), secret: mpClone(secret), chest: mpClone(chest), exitPortal: mpClone(exitPortal), sidePortal: mpClone(sidePortal) };
+        const room = { key: mpRoomKey(), floorN, roomN, cellKey: cell ? cell.x + ',' + cell.y : null, dun: mpClone(dun), rs, introT, doorOpen, waveQueue: mpClone(waveQueue), obstacles: mpClone(obstacles), lights: mpClone(lights), feats: mpClone(feats), shopItems: mpClone(shopItems), secret: mpClone(secret), chest: mpClone(chest), exitPortal: mpClone(exitPortal), sidePortal: mpClone(sidePortal) };
         try {
           const upgradeCards = state === 'upgrade' ? cards.map(c => ({ id: c.id, name: c.name, desc: c.desc, col: c.col, icon: c.icon, art: c.art, rar: c.rar || 0, max: c.max || 99, statKey: c.statKey || null, statValue: Number.isFinite(c.statValue) ? c.statValue : null })) : null;
           const revision = ++mpWorldRevision;
