@@ -643,8 +643,12 @@
         return e;
       }
       function spawnWave() {
-        // Las apariciones de enemigos solo las decide el anfitrión.
-        if (MP && MP.connected && !MP.isHost) return;
+        // El anfitrión crea la oleada; los clientes consumen la misma entrada
+        // para mantener sincronizada la progresión local de la sala.
+        if (MP && MP.connected && !MP.isHost) {
+          waveQueue.shift();
+          return;
+        }
         const list = waveQueue.shift();
         for (const t of list) {
           const pos = t === 'boss' ? { x: W / 2, y: 230 } : spawnPos(t === 'mini' ? 34 : ET[t].r);
