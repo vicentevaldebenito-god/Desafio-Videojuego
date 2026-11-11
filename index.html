@@ -909,6 +909,10 @@
       function hurtEnemy(e, dmg, o) {
         o = o || {};
         if (e.dead || e.spawnT > 0 || e.orbit > 0) return 0;
+        if (MP && MP.connected && !MP.isHost && !o.fromMP) {
+          if (e.netId && MP.socket && MP.socket.readyState === WebSocket.OPEN) MP.socket.send(JSON.stringify({ type: 'enemy-hit', netId: e.netId, damage: Math.max(0, Number(dmg) || 0), options: { ang: Number.isFinite(o.ang) ? o.ang : undefined, ignoreArmor: !!o.ignoreArmor, noText: !!o.noText } }));
+          return 0;
+        }
         if (e.boss && bfl() === 4) { if (e.parryT > 0) { e.reflect = true; return 0; } if (e.dodgeT > 0) return 0; if (!(e.ecd > 0)) { const rr = Math.random(); if (rr < 0.28) { e.parryT = 0.5; e.ecd = 2.2; ring(e.x, e.y, 70, '#ffffff', 0.4, 6); AudioSys.sfx('parry'); return 0; } else if (rr < 0.5) { e.dodgeT = 0.3; e.dodgeA = Math.atan2(P.y - e.y, P.x - e.x) + (Math.random() < 0.5 ? 1 : -1) * Math.PI / 2; e.ecd = 1.6; return 0; } } }
         if (e.boss && bfl() === 6) dmg *= Math.max(0.35, 1 - 0.03 * (enemies.length - 1));
         let m = 1, crit = false;
@@ -1515,9 +1519,9 @@
         dun = { cells }; cell = cells['0,0']; abyssT = 0; hunter = null;
       }
       function doorList() { const out = []; for (const [d, dx, dy, px, py] of [['u', 0, -1, W / 2, WALL], ['d', 0, 1, W / 2, H - WALL], ['l', -1, 0, WALL, H / 2], ['r', 1, 0, W - WALL, H / 2]]) { const n = dun.cells[(cell.x + dx) + ',' + (cell.y + dy)]; if (n && (n.type !== 'secret' || n.rev)) out.push({ d, n, px, py }); } return out; }
-      function goDoor(o) { cell = o.n; cell.visited = true; roomN = Math.max(1, cell.d); startRoom(); const m = 90; if (o.d === 'u') { P.x = W / 2; P.y = H - WALL - m; } else if (o.d === 'd') { P.x = W / 2; P.y = WALL + m; } else if (o.d === 'l') { P.x = W - WALL - m; P.y = H / 2; } else { P.x = WALL + m; P.y = H / 2; } }
+      function goDoor(o) { if (MP && MP.connected && !MP.isHost) return; cell = o.n; cell.visited = true; roomN = Math.max(1, cell.d); startRoom(); const m = 90; if (o.d === 'u') { P.x = W / 2; P.y = H - WALL - m; } else if (o.d === 'd') { P.x = W / 2; P.y = WALL + m; } else if (o.d === 'l') { P.x = W - WALL - m; P.y = H / 2; } else { P.x = WALL + m; P.y = H / 2; } }
       function revealSecrets() { for (const d of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const n = dun.cells[(cell.x + d[0]) + ',' + (cell.y + d[1])]; if (n && n.type === 'secret' && !n.rev) { n.rev = true; floatText('¡UNA GRIETA SE ABRE!', W / 2, H / 2, '#2ee6ff', 18); AudioSys.sfx('rankup'); } } }
-      function nextSector() { floorN++; if (floorN > FLOORS) { if (infinite) { floorN = 1; loop++; } else { floorN = FLOORS; endRun(true); return; } } roomN = 1; genDungeon(); startRoom(); }
+      function nextSector() { if (MP && MP.connected && !MP.isHost) return; floorN++; if (floorN > FLOORS) { if (infinite) { floorN = 1; loop++; } else { floorN = FLOORS; endRun(true); return; } } roomN = 1; genDungeon(); startRoom(); }
       function addXP(n) { xp += n * P.st.xp * (1 + 0.2 * style / 100) * (1 + 0.5 * (floorN - 1) + loop) * (1 + 0.2 * cfg.pres) * 2; while (xp >= xpNeed) { xp -= xpNeed; level++; xpNeed = Math.round(xpNeed * 1.25); pend++; if (level % 5 === 0) cpend++; } }
       const STATS = [
         { id: 's_dmg', k: 'dmg', name: 'DAÑO BRUTAL', label: 'Daño', base: 0.12, art: 'implo', icon: 'burst' },
@@ -1833,8 +1837,8 @@
             }
           }
         }
-        if (exitPortal && dist(P.x, P.y, exitPortal.x, exitPortal.y) < 50) { exitPortal = null; nextSector(); return; }
-        if (rs === 'cleared' || rs === 'shop') for (const o of doorList()) if (dist(P.x, P.y, o.px, o.py) < 46) { goDoor(o); return; }
+        if ((!MP.connected || MP.isHost) && exitPortal && dist(P.x, P.y, exitPortal.x, exitPortal.y) < 50) { exitPortal = null; nextSector(); return; }
+        if ((!MP.connected || MP.isHost) && (rs === 'cleared' || rs === 'shop')) for (const o of doorList()) if (dist(P.x, P.y, o.px, o.py) < 46) { goDoor(o); return; }
         doorOpen = approach(doorOpen, rs === 'cleared' || rs === 'shop' ? 1 : 0, dt * 2);
       }
       function openUpgrades() {
@@ -2592,9 +2596,7 @@
         lctx.fillStyle = 'rgba(1,4,10,0.52)'; lctx.fillRect(0, 0, LW, LH);
         lctx.globalCompositeOperation = 'destination-out';
         hole(P.x, P.y, 400, 1);
-        for (const remote of MP.remotePlayers.values()) {
-    hole(remote.x, remote.y, 300, 0.8);
-}
+        for (const remote of MP.remotePlayers.values()) if (!MP.connected || remote.roomKey === mpRoomKey()) hole(remote.x, remote.y, 300, 0.8);
         for (const f of flares) hole(f.x, f.y, f.r * 1.7, Math.min(1, f.life / 1.5));
         for (const c of clouds) hole(c.x, c.y, 130, 0.7);
         for (const pl of pools) hole(pl.x, pl.y, pl.r * 1.6, 0.6);
@@ -2623,6 +2625,7 @@
 
 // Dibujar compañeros
 for (const remote of MP.remotePlayers.values()) {
+    if (MP.connected && remote.roomKey !== mpRoomKey()) continue;
     drawPlayer(remote);
 
     txt(
@@ -2674,6 +2677,17 @@ for (const remote of MP.remotePlayers.values()) {
       function fadeA(x, y, w, h) { return P && P.x > x - 70 && P.x < x + w + 70 && P.y > y - 70 && P.y < y + h + 70 ? 0.3 : 1; }
       function drawHUD() {
         if (!P) return; hudExtra();
+        if (MP && MP.connected) {
+          let yy = 118;
+          for (const remote of MP.remotePlayers.values()) {
+            if (remote.roomKey !== mpRoomKey()) continue;
+            const f = clamp((remote.hp || 0) / Math.max(1, remote.maxHp || 1), 0, 1);
+            ctx.globalAlpha = 0.9; panel(14, yy, 190, 31); txt('ALIADO', 23, yy + 12, 9, '#37ffb0');
+            bar(23, yy + 17, 170, 6, f, f > 0.5 ? '#37ffb0' : f > 0.25 ? '#ffb13b' : '#ff3b4a');
+            txt(Math.ceil(remote.hp || 0) + '/' + (remote.maxHp || 0), 198, yy + 12, 8, '#fff', 'right'); yy += 36;
+          }
+          ctx.globalAlpha = 1;
+        }
         const th = THEMES[floorN - 1] || THEMES[0], hpf = clamp(P.hp / P.maxHp, 0, 1), hc = hpf > 0.5 ? '#3bd98a' : hpf > 0.25 ? '#ffb13b' : '#ff3b4a';
         ctx.globalAlpha = fadeA(14, 14, 236, 86); panel(14, 14, 236, 86);
         bar(24, 22, 216, 12, hpf, hc); txt(Math.ceil(P.hp) + '/' + P.maxHp, 132, 32, 11, '#fff', 'center');
@@ -2974,7 +2988,10 @@ for (const remote of MP.remotePlayers.values()) {
         hostId: null,
         isHost: false,
         remotePlayers: new Map(),
-        syncTimer: 0
+        syncTimer: 0,
+        roomKey: null,
+        lastSessionKey: null,
+        remoteBullets: []
       };
 
       let mpOpen = false;
@@ -3223,6 +3240,10 @@ for (const remote of MP.remotePlayers.values()) {
             remote.flash = Number(data.flash) || 0;
             remote.cd = [Number(data.cd0) || 0, 0];
             remote.shield = Number(data.shield) || 0;
+            remote.hp = Number(data.hp) || 0;
+            remote.maxHp = Number(data.maxHp) || 1;
+            remote.dead = !!data.dead;
+            remote.roomKey = data.roomKey || null;
             remote.lastSeen = performance.now();
 
             return;
@@ -3230,6 +3251,11 @@ for (const remote of MP.remotePlayers.values()) {
 
           if (data.type === "world-state" && !MP.isHost) {
             mpApplyWorld(data);
+            return;
+          }
+          if (data.type === 'enemy-hit' && MP.isHost) {
+            const target = enemies.find(e => e.netId === data.netId && !e.dead);
+            if (target && Number.isFinite(Number(data.damage))) hurtEnemy(target, Math.min(100000, Math.max(0, Number(data.damage))), { ...(data.options || {}), fromMP: true });
             return;
           }
 
@@ -3298,13 +3324,43 @@ for (const remote of MP.remotePlayers.values()) {
       let mpWorldTimer = 0;
       let mpWorldRevision = 0;
 
+      function mpRoomKey() { return `${floorN}:${cell ? cell.x + ',' + cell.y : 'none'}`; }
+      function mpClone(value) { try { return JSON.parse(JSON.stringify(value)); } catch { return null; } }
       function mpApplyWorld(data) {
-        if (!Array.isArray(data.enemies)) return;
-        enemies = data.enemies.filter(e =>
-          e && typeof e.netId === 'string' &&
-          Number.isFinite(e.x) && Number.isFinite(e.y) &&
-          Number.isFinite(e.hp)
-        ).map(e => ({ ...e, pinned: null, impaled: null }));
+        if (data.room) {
+          const r = data.room;
+          if (r.key && r.key !== MP.lastSessionKey) {
+            floorN = Number(r.floorN) || floorN; roomN = Number(r.roomN) || roomN;
+            if (r.dun && r.dun.cells) dun = mpClone(r.dun);
+            if (dun && dun.cells && r.cellKey) cell = dun.cells[r.cellKey] || cell;
+            if (cell) startRoom();
+            MP.lastSessionKey = r.key;
+          }
+          if (r.dun && r.dun.cells) dun = mpClone(r.dun);
+          if (dun && dun.cells && r.cellKey) cell = dun.cells[r.cellKey] || cell;
+          floorN = Number(r.floorN) || floorN; roomN = Number(r.roomN) || roomN;
+          rs = r.rs || rs; introT = Number(r.introT) || 0; doorOpen = Number(r.doorOpen) || 0;
+          waveQueue = mpClone(r.waveQueue) || waveQueue;
+          if (r.obstacles) obstacles = mpClone(r.obstacles);
+          if (r.lights) lights = mpClone(r.lights);
+          if (r.feats) feats = mpClone(r.feats);
+          if (r.secret !== undefined) secret = mpClone(r.secret);
+          if (r.chest !== undefined) chest = mpClone(r.chest);
+          if (r.exitPortal !== undefined) exitPortal = mpClone(r.exitPortal);
+          if (r.sidePortal !== undefined) sidePortal = mpClone(r.sidePortal);
+          if (typeof bakeBG === 'function') bakeBG();
+        }
+        if (Array.isArray(data.enemies)) enemies = data.enemies.filter(e => e && typeof e.netId === 'string' && Number.isFinite(e.x) && Number.isFinite(e.y) && Number.isFinite(e.hp)).map(e => ({ ...e, pinned: null, impaled: null }));
+        if (Array.isArray(data.ebullets)) ebullets = mpClone(data.ebullets) || [];
+        if (Array.isArray(data.pickups)) pickups = mpClone(data.pickups) || [];
+        if (Array.isArray(data.orbs)) orbs = mpClone(data.orbs) || [];
+        if (Number.isFinite(data.xp)) xp = data.xp;
+        if (Number.isFinite(data.level)) level = data.level;
+        if (Number.isFinite(data.xpNeed)) xpNeed = data.xpNeed;
+        if (Number.isFinite(data.organs)) organs = data.organs;
+        if (Number.isFinite(data.pend)) pend = data.pend;
+        if (Number.isFinite(data.cpend)) cpend = data.cpend;
+        if (Number.isFinite(data.kills)) kills = data.kills;
         mpWorldRevision = Number(data.revision) || mpWorldRevision;
       }
 
@@ -3317,21 +3373,12 @@ for (const remote of MP.remotePlayers.values()) {
 
         const snapshot = enemies.map(e => {
           const out = { netId: e.netId || (e.netId = crypto.randomUUID()) };
-          for (const key of MP_WORLD_FIELDS) {
-            const value = e[key];
-            if (value === null || ['string','number','boolean'].includes(typeof value)) {
-              out[key] = value;
-            }
-          }
+          for (const key of MP_WORLD_FIELDS) { const value = e[key]; if (value === null || ['string','number','boolean'].includes(typeof value)) out[key] = value; }
           return out;
         });
-
+        const room = { key: mpRoomKey(), floorN, roomN, cellKey: cell ? cell.x + ',' + cell.y : null, dun: mpClone(dun), rs, introT, doorOpen, waveQueue: mpClone(waveQueue), obstacles: mpClone(obstacles), lights: mpClone(lights), feats: mpClone(feats), secret: mpClone(secret), chest: mpClone(chest), exitPortal: mpClone(exitPortal), sidePortal: mpClone(sidePortal) };
         try {
-          MP.socket.send(JSON.stringify({
-            type: 'world-state',
-            revision: ++mpWorldRevision,
-            enemies: snapshot
-          }));
+          MP.socket.send(JSON.stringify({ type: 'world-state', revision: ++mpWorldRevision, room, enemies: snapshot, ebullets: mpClone(ebullets), pickups: mpClone(pickups), orbs: mpClone(orbs), xp, level, xpNeed, organs, pend, cpend, kills }));
         } catch (error) {
           console.warn('[MP] Error sincronizando enemigos:', error);
         }
@@ -3364,7 +3411,11 @@ for (const remote of MP.remotePlayers.values()) {
                 iframes: P.iframes,
                 flash: P.flash,
                 cd0: P.cd[0],
-                shield: P.shield
+                shield: P.shield,
+                hp: P.hp,
+                maxHp: P.maxHp,
+                dead: P.dead,
+                roomKey: mpRoomKey()
               }));
             } catch (error) {
               console.warn("[MP] Error enviando posición:", error);
