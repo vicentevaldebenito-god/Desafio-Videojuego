@@ -70,7 +70,8 @@
       function resize() {
         const k = Math.min(window.innerWidth / W, window.innerHeight / H);
         const cw = Math.max(320, Math.floor(W * k)), ch = Math.max(180, Math.floor(H * k));
-        const dpr = Math.min(window.devicePixelRatio || 1, 2);
+        // En móviles limitamos la resolución interna para aliviar GPU y batería.
+        const dpr = Math.min(window.devicePixelRatio || 1, MOBILE ? 1.35 : 2);
         canvas.style.width = cw + 'px'; canvas.style.height = ch + 'px';
         canvas.width = Math.floor(cw * dpr); canvas.height = Math.floor(ch * dpr);
         scale = canvas.width / W;
@@ -119,7 +120,7 @@
          --------------------------------------------------------------------- */
       const keys = {}, pressed = {};
       const mouse = { x: W / 2, y: H / 2, l: false, r: false, lp: false, rp: false };
-      const touchPad = { moveId: null, specialId: null, interactId: null, joyX: 0, joyY: 0, active: false };
+      const touchPad = { moveId: null, specialId: null, dashId: null, interactId: null, joyX: 0, joyY: 0, active: false };
       let mobileInteractPulse = false;
       let wheelDir = 0;
       function touchGamePoint(e) {
@@ -144,9 +145,11 @@
         const circle = (x,y,r,fill,stroke) => { ctx.beginPath(); ctx.arc(x,y,r,0,TAU); ctx.fillStyle=fill; ctx.fill(); ctx.lineWidth=3; ctx.strokeStyle=stroke; ctx.stroke(); };
         circle(142,578,82,'rgba(4,20,34,.38)','rgba(110,220,255,.30)');
         circle(142 + touchPad.joyX*55,578 + touchPad.joyY*55,31,'rgba(46,230,255,.32)','rgba(150,235,255,.8)');
+        circle(970,590,51,'rgba(255,177,59,.18)','rgba(255,177,59,.85)');
         circle(1090,590,57,'rgba(125,255,106,.18)','rgba(125,255,106,.8)');
         circle(1180,470,57,'rgba(46,230,255,.18)','rgba(46,230,255,.8)');
         ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.font='bold 15px Arial';
+        ctx.fillStyle='#ffd08a'; ctx.fillText('DASH',970,590);
         ctx.fillStyle='#baffc8'; ctx.fillText('ESPECIAL',1090,590);
         ctx.fillStyle='#b8f4ff'; ctx.fillText('USAR',1180,462); ctx.fillText('E',1180,484);
         ctx.fillStyle='rgba(180,225,245,.72)'; ctx.font='12px Arial'; ctx.fillText('MOVER',142,682);
@@ -158,6 +161,8 @@
         AudioSys.init(); AudioSys.resume();
         if (p.x < 300 && p.y > 390 && touchPad.moveId === null) {
           touchPad.moveId = e.pointerId; updateTouchMove(e);
+        } else if (p.x > 900 && p.x <= 1035 && p.y > 520 && touchPad.dashId === null) {
+          touchPad.dashId = e.pointerId; pressed.Space = true;
         } else if (p.x > 1015 && p.y > 520 && touchPad.specialId === null) {
           touchPad.specialId = e.pointerId; pressed.KeyF = true;
         } else if (p.x > 1090 && p.y > 385 && p.y <= 535 && touchPad.interactId === null) {
@@ -176,6 +181,7 @@
       const endTouchPointer = e => {
         if (touchPad.moveId === e.pointerId) clearTouchMove();
         if (touchPad.specialId === e.pointerId) { touchPad.specialId = null; }
+        if (touchPad.dashId === e.pointerId) touchPad.dashId = null;
         if (touchPad.interactId === e.pointerId) touchPad.interactId = null;
       };
       canvas.addEventListener('pointerup', endTouchPointer);
@@ -216,7 +222,7 @@
       canvas.addEventListener('wheel', e => { e.preventDefault(); wheelDir = Math.sign(e.deltaY); }, { passive: false });
       window.addEventListener('blur', () => {
         for (const k in keys) keys[k] = false;
-        clearTouchMove(); touchPad.specialId = touchPad.interactId = null;
+        clearTouchMove(); touchPad.specialId = touchPad.dashId = touchPad.interactId = null;
         mouse.l = mouse.r = false;
         if (state === 'playing' && (!MP || !MP.connected || MP.isHost)) state = 'paused';
       });
