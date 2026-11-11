@@ -2180,8 +2180,8 @@
       /* ---------------------------------------------------------------------
          14. RENDER: ENTIDADES
          --------------------------------------------------------------------- */
-      function drawPlayer() {
-        const p = P, th = THEMES[floorN - 1];
+      function drawPlayer(player = P) {
+        const p = player, th = THEMES[floorN - 1];
         ctx.save(); ctx.translate(p.x, p.y);
         ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.beginPath(); ctx.ellipse(3, 6, p.r + 2, p.r, 0, 0, TAU); ctx.fill();
         ctx.rotate(p.angle);
@@ -2582,6 +2582,9 @@
         lctx.fillStyle = 'rgba(1,4,10,0.52)'; lctx.fillRect(0, 0, LW, LH);
         lctx.globalCompositeOperation = 'destination-out';
         hole(P.x, P.y, 400, 1);
+        for (const remote of MP.remotePlayers.values()) {
+    hole(remote.x, remote.y, 300, 0.8);
+}
         for (const f of flares) hole(f.x, f.y, f.r * 1.7, Math.min(1, f.life / 1.5));
         for (const c of clouds) hole(c.x, c.y, 130, 0.7);
         for (const pl of pools) hole(pl.x, pl.y, pl.r * 1.6, 0.6);
@@ -2607,6 +2610,21 @@
         drawFlares();
         drawEBullets();
         if (!P.dead) drawPlayer();
+
+// Dibujar compañeros
+for (const remote of MP.remotePlayers.values()) {
+    drawPlayer(remote);
+
+    txt(
+        'ALIADO',
+        remote.x,
+        remote.y - remote.r - 16,
+        11,
+        '#37ffb0',
+        'center',
+        5
+    );
+}
         drawParts(false);
         drawLightsAndAmbient();
         drawDarkness();
@@ -2893,6 +2911,7 @@
         let gdt = dt;
         if (hitstop > 0) { hitstop -= dt; gdt = dt * 0.08; }
         try { update(gdt); } catch (err) { if (!window.__uerr) { window.__uerr = 1; console.error(err); } }
+        mpSyncUpdate(dt);
         try { render(); } catch (err) { if (!window.__rerr) { window.__rerr = 1; console.error(err); } resize(); }
         for (const k in pressed) pressed[k] = false;
         mouse.lp = false; mouse.rp = false; wheelDir = 0;
@@ -2909,7 +2928,9 @@
         room: null,
         id: crypto.randomUUID(),
         players: 0,
-        connected: false
+        connected: false,
+        remotePlayers: new Map(),
+        syncTimer: 0
       };
 
       let mpOpen = false;
@@ -3113,6 +3134,51 @@
             return;
           }
 
+          if (data.type === 'player-state' && data.id !== MP.id) {
+            const x = Number(data.x);
+            const y = Number(data.y);
+            const angle = Number(data.angle);
+
+            if (![x, y, angle].every(Number.isFinite)) return;
+
+            let remote = MP.remotePlayers.get(data.id);
+
+            if (!remote) {
+              remote = {
+                x, y,
+                tx: x,
+                ty: y,
+                angle,
+                ta: angle,
+                r: 16,
+                weapon: 0,
+                kick: 0,
+                dashT: 0,
+                iframes: 0,
+                flash: 0,
+                cd: [0, 0],
+                shield: 0,
+                lastSeen: performance.now()
+              };
+
+              MP.remotePlayers.set(data.id, remote);
+            }
+
+            remote.tx = x;
+            remote.ty = y;
+            remote.ta = angle;
+            remote.r = Number(data.r) || 16;
+            remote.weapon = data.weapon === 1 ? 1 : 0;
+            remote.kick = Number(data.kick) || 0;
+            remote.dashT = Number(data.dashT) || 0;
+            remote.iframes = Number(data.iframes) || 0;
+            remote.flash = Number(data.flash) || 0;
+            remote.cd = [Number(data.cd0) || 0, 0];
+            remote.shield = Number(data.shield) || 0;
+            remote.lastSeen = performance.now();
+
+            return;
+          }
           if (data.type === "welcome") {
             MP.players = data.players;
             mpUpdateCount();
