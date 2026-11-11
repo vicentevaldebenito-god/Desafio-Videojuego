@@ -161,11 +161,13 @@
         } else if (p.x > 1015 && p.y > 520 && touchPad.specialId === null) {
           touchPad.specialId = e.pointerId; pressed.KeyF = true;
         } else if (p.x > 1090 && p.y > 385 && p.y <= 535 && touchPad.interactId === null) {
-          touchPad.interactId = e.pointerId; mouse.lp = true;
+          touchPad.interactId = e.pointerId;
+          mouse.lp = true; pressed.Enter = true;
         } else {
           // Tocar el resto de la pantalla sirve para seleccionar menús y cartas.
           mouse.x = p.x; mouse.y = p.y; mouse.lp = true;
         }
+        try { canvas.setPointerCapture(e.pointerId); } catch (_) {}
         e.preventDefault();
       }, { passive:false });
       canvas.addEventListener('pointermove', e => {
@@ -214,6 +216,7 @@
       canvas.addEventListener('wheel', e => { e.preventDefault(); wheelDir = Math.sign(e.deltaY); }, { passive: false });
       window.addEventListener('blur', () => {
         for (const k in keys) keys[k] = false;
+        clearTouchMove(); touchPad.specialId = touchPad.interactId = null;
         mouse.l = mouse.r = false;
         if (state === 'playing' && (!MP || !MP.connected || MP.isHost)) state = 'paused';
       });
