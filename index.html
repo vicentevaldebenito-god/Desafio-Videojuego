@@ -1586,7 +1586,26 @@
           if (e.amT > 14) { e.amT = 0; let nf; do { nf = 1 + Math.floor(Math.random() * 7); } while (nf === amalForm); amalForm = nf; e.state = 'walk'; e.st = 0.8; shake(20); ring(e.x, e.y, 400, '#ffffff', 0.7, 8); AudioSys.sfx('roar'); banner = { t: 1.8, max: 1.8, l1: '¡LA AMALGAMA MUTA!', l2: ['', 'LEVIATÁN', 'ANGLERFISH', 'KRAKEN', 'EL ECO', 'ANGUILA', 'COLMENA', 'BALLENA'][amalForm] }; }
         }
         if (bfl() === 4) { e.parryT = Math.max(0, (e.parryT || 0) - dt); e.dodgeT = Math.max(0, (e.dodgeT || 0) - dt); e.ecd = Math.max(0, (e.ecd || 0) - dt); if (e.reflect) { e.reflect = false; for (let i = -3; i <= 3; i++) enemyShoot(e, toP + i * 0.12, 560, 12, false); ring(e.x,e.y,115,'#8feaff',0.35,5); } if (e.dodgeT > 0) { moveEntity(e, Math.cos(e.dodgeA) * 900 * dt, Math.sin(e.dodgeA) * 900 * dt, e.r); e.vis = e.dodgeA; return; } if(e.ecd<=0 && e.parryT<=0 && e.state!=='mirror_dash' && e.state!=='mirror_dash_aim' && Math.random()<dt*0.65){e.parryT=0.62;e.ecd=2.8;ring(e.x,e.y,78,'#b9f4ff',0.38,5);AudioSys.sfx('parry');} }
-        if (bfl() === 5) { if (!e.seg) e.seg = Array.from({ length: 25 }, () => ({ x: e.x, y: e.y })); let px = e.x, py = e.y; for (const g of e.seg) { const dx = g.x - px, dy = g.y - py, dd = Math.hypot(dx, dy) || 1; if (dd > 27) { g.x = px + dx / dd * 27; g.y = py + dy / dd * 27; } px = g.x; py = g.y; } }
+        if (bfl() === 5) {
+          // Cadena articulada: cada placa sigue a la anterior manteniendo separación constante.
+          const count = 30, spacing = 22, face = Number.isFinite(e.face) ? e.face : 0;
+          if (!e.seg || e.seg.length !== count) {
+            e.seg = Array.from({ length: count }, (_, i) => ({
+              x: e.x - Math.cos(face) * spacing * (i + 1),
+              y: e.y - Math.sin(face) * spacing * (i + 1)
+            }));
+          }
+          let px = e.x, py = e.y;
+          for (let i = 0; i < e.seg.length; i++) {
+            const g = e.seg[i], dx = g.x - px, dy = g.y - py;
+            const dd = Math.hypot(dx, dy) || 0.001;
+            const tx = px + dx / dd * spacing, ty = py + dy / dd * spacing;
+            // Suaviza el seguimiento para que las curvas viajen por todo el cuerpo.
+            g.x += (tx - g.x) * 0.72;
+            g.y += (ty - g.y) * 0.72;
+            px = g.x; py = g.y;
+          }
+        }
         const bait = enemies.find(b => b.type === 'bait' && !b.dead), wAng = bait ? Math.atan2(bait.y - e.y, bait.x - e.x) : toP;
         const xl = k => { const m = WALL + 70; return k === 0 ? [m, m, W - m, H - m] : [W - m, m, m, H - m]; };
         const next = () => {
@@ -3240,9 +3259,47 @@ maxRank = Math.max(maxRank, sr()); ambT -= dt; if (ambT <= 0) { ambT = rand(9, 2
             ctx.globalAlpha = ddg ? 0.4 : 1; ctx.save(); ctx.scale(2.6, 2.6); ctx.fillStyle = fl ? '#fff' : '#5a1a28'; ctx.fillRect(-14, -8, 30, 26); ctx.fillStyle = fl ? '#fff' : '#2a0a12'; ctx.fillRect(-20, -6, 8, 22); ctx.fillStyle = fl ? '#fff' : '#c0394d'; ctx.beginPath(); ctx.arc(2, -16, 11, 0, TAU); ctx.fill(); ctx.fillStyle = '#12020a'; ctx.beginPath(); ctx.arc(6, -16, 7, 0, TAU); ctx.fill(); ctx.fillStyle = bc; ctx.beginPath(); ctx.arc(8, -16, 2.5, 0, TAU); ctx.fill(); ctx.restore();
             ctx.strokeStyle = bc; ctx.lineWidth = 5; ctx.beginPath(); ctx.moveTo(30, 20); ctx.lineTo(30 + Math.cos(fa0) * 60, 20 + Math.sin(fa0) * 60); ctx.stroke(); if (par) { ctx.strokeStyle = '#fff'; ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(0, 0, 60, 0, TAU); ctx.stroke(); } ctx.globalAlpha = 1; if (e.vuln > 0) addGlow(e.x, e.y, 130, '#ffe94a', 0.6);
           } else if (bfl() === 5) {
-            // Anguila eléctrica: cuerpo largo y flexible con cola y aleta dorsal.
-            ctx.rotate(-fa0);const sg=e.seg||[];
-            for(let i=sg.length-1;i>=0;i--){const g=sg[i],u=(i+1)/(sg.length+1),rr=Math.max(2.5,r*(.78-.67*u)),x=g.x-e.x,y=g.y-e.y,wig=Math.sin(e.t*4.5-i*.36)*r*.035;ctx.fillStyle=grd(Math.max(4,rr)*1.5,i%2?'#d9ce55':'#9d8c27','#171707');ctx.beginPath();ctx.ellipse(x+wig,y,rr*1.25,rr*.82,Math.atan2(y,x),0,TAU);ctx.fill();ctx.strokeStyle='rgba(255,239,115,.35)';ctx.lineWidth=1.4;ctx.stroke();if(i%3===0){ctx.fillStyle='#f6e96b';ctx.globalAlpha=.55;ctx.beginPath();ctx.arc(x,y,Math.max(1.5,rr*.17),0,TAU);ctx.fill();ctx.globalAlpha=1;}}
+            // Anguila trueno: placas independientes, cola fina y movimiento serpentino.
+            ctx.rotate(-fa0);
+            const sg = e.seg || [];
+            // Dibujar desde la cola hacia la cabeza para conservar el solapamiento.
+            for (let i = sg.length - 1; i >= 0; i--) {
+              const g = sg[i], prev = i === 0 ? { x: e.x, y: e.y } : sg[i - 1];
+              const next = sg[i + 1] || { x: g.x + (g.x - prev.x), y: g.y + (g.y - prev.y) };
+              const u = (i + 1) / (sg.length + 1);
+              const rr = Math.max(3.2, r * (0.72 - 0.48 * u));
+              const x = g.x - e.x, y = g.y - e.y;
+              const tangent = Math.atan2(next.y - prev.y, next.x - prev.x);
+              const wave = Math.sin(e.t * 5.2 - i * 0.34) * r * 0.025;
+              ctx.save();
+              ctx.translate(x + wave, y);
+              ctx.rotate(tangent - fa0);
+              // Aleta dorsal pequeña en cada placa alterna: silueta de anguila eléctrica.
+              if (i % 2 === 0 && i < sg.length - 2) {
+                ctx.fillStyle = fl ? '#fff' : '#c9b83d';
+                ctx.beginPath();
+                ctx.moveTo(-rr * 0.45, -rr * 0.48);
+                ctx.quadraticCurveTo(0, -rr * 1.05, rr * 0.55, -rr * 0.43);
+                ctx.closePath(); ctx.fill();
+              }
+              const plate = grd(rr * 1.8, i % 2 ? '#d9ce55' : '#9d8c27', '#171707');
+              ctx.fillStyle = plate;
+              ctx.beginPath(); ctx.ellipse(0, 0, rr * 1.2, rr * 0.78, 0, 0, TAU); ctx.fill();
+              ctx.strokeStyle = 'rgba(255,239,115,.58)'; ctx.lineWidth = 1.5; ctx.stroke();
+              // Unión oscura visible entre placas.
+              ctx.strokeStyle = 'rgba(35,28,5,.8)'; ctx.lineWidth = 2;
+              ctx.beginPath(); ctx.moveTo(-rr * 0.72, -rr * 0.42); ctx.lineTo(-rr * 0.72, rr * 0.42); ctx.stroke();
+              // Órgano eléctrico luminoso en el centro de cada segmento.
+              ctx.fillStyle = '#fff07a'; ctx.globalAlpha = 0.72 + 0.2 * Math.sin(e.t * 9 - i * 0.45);
+              ctx.beginPath(); ctx.ellipse(0, 0, rr * 0.56, rr * 0.2, 0, 0, TAU); ctx.fill();
+              ctx.globalAlpha = 1;
+              ctx.restore();
+            }
+            // Línea bioeléctrica continua que conecta todos los segmentos.
+            ctx.save(); ctx.strokeStyle = 'rgba(255,245,125,.72)'; ctx.lineWidth = Math.max(2, r * 0.055);
+            ctx.shadowColor = '#f5e64b'; ctx.shadowBlur = 12; ctx.beginPath();
+            ctx.moveTo(0, 0); for (const g of sg) ctx.lineTo(g.x - e.x, g.y - e.y);
+            ctx.stroke(); ctx.restore();
             ctx.fillStyle=fl?'#fff':'#e9d94b';for(let i=0;i<9;i++){const x=-r*.05-i*r*.31,yy=Math.sin(e.t*5-i*.65)*r*.05;ctx.beginPath();ctx.moveTo(x-r*.13,yy-r*.43);ctx.quadraticCurveTo(x,yy-r*(.82+.1*Math.sin(e.t*5-i)),x+r*.18,yy-r*.39);ctx.closePath();ctx.fill();}
             const head=ctx.createLinearGradient(0,-r,0,r);head.addColorStop(0,fl?'#fff':'#fff07a');head.addColorStop(1,fl?'#fff':'#71621b');ctx.fillStyle=head;ctx.beginPath();ctx.moveTo(r*.75,-r*.5);ctx.quadraticCurveTo(r*1.8,-r*.42,r*2.35,-r*.08);ctx.quadraticCurveTo(r*2.5,0,r*2.35,r*.08);ctx.quadraticCurveTo(r*1.8,r*.42,r*.75,r*.5);ctx.quadraticCurveTo(r*.45,0,r*.75,-r*.5);ctx.fill();ctx.strokeStyle=bc;ctx.lineWidth=3;ctx.stroke();
             for(const sd of [-1,1]){ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(r*1.45,sd*r*.25,4.5,0,TAU);ctx.fill();ctx.fillStyle='#171300';ctx.beginPath();ctx.arc(r*1.5,sd*r*.25,2,0,TAU);ctx.fill();}
