@@ -2064,7 +2064,7 @@
         if (P.invT > 0) { P.invT -= dt; P.iframes = Math.max(P.iframes, 0.1); if (P.invT <= 0) P.vulnT = 5; } if (P.vulnT > 0) P.vulnT -= dt;
         stillT = Math.hypot(P.vx, P.vy) < 8 ? stillT + dt : 0; if (chm('still') && stillT > 1.5 && P.shield < 1 + chm('still')) { P.shield++; stillT = 0; ring(P.x, P.y, 50, '#7ad7ff', 0.3, 3); AudioSys.sfx('rankup'); }
         streakT -= dt; if (streakT <= 0) streak = 0; style = Math.max(0, style - dt * (3 + sr() * 2.5)); introDark = Math.max(0, introDark - dt);
-        roomLogic(dt);
+        if (!MP.connected || MP.isHost) roomLogic(dt);
         updateEnemies(dt);
         updateBullets(dt); updateEBullets(dt);
         updateClouds(dt); updatePools(dt); updateFlares(dt); updatePickups(dt);
@@ -3332,9 +3332,11 @@ for (const remote of MP.remotePlayers.values()) {
       function mpRoomKey() { return `${floorN}:${cell ? cell.x + ',' + cell.y : 'none'}`; }
       function mpClone(value) { try { return JSON.parse(JSON.stringify(value)); } catch { return null; } }
       function mpApplyWorld(data) {
+        let roomChanged = false;
         if (data.room) {
           const r = data.room;
           if (r.key && r.key !== MP.lastSessionKey) {
+            roomChanged = true;
             floorN = Number(r.floorN) || floorN; roomN = Number(r.roomN) || roomN;
             if (r.dun && r.dun.cells) dun = mpClone(r.dun);
             if (dun && dun.cells && r.cellKey) cell = dun.cells[r.cellKey] || cell;
@@ -3353,7 +3355,7 @@ for (const remote of MP.remotePlayers.values()) {
           if (r.chest !== undefined) chest = mpClone(r.chest);
           if (r.exitPortal !== undefined) exitPortal = mpClone(r.exitPortal);
           if (r.sidePortal !== undefined) sidePortal = mpClone(r.sidePortal);
-          if (typeof bakeBG === 'function') bakeBG();
+          if (roomChanged && typeof bakeBG === 'function') bakeBG();
         }
         if (Array.isArray(data.enemies)) enemies = data.enemies.filter(e => e && typeof e.netId === 'string' && Number.isFinite(e.x) && Number.isFinite(e.y) && Number.isFinite(e.hp)).map(e => ({ ...e, pinned: null, impaled: null }));
         if (Array.isArray(data.ebullets)) ebullets = mpClone(data.ebullets) || [];
