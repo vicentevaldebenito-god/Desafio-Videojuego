@@ -235,6 +235,12 @@
         } else if (p.x > 1090 && p.y > 385 && p.y <= 535 && touchPad.interactId === null) {
           touchPad.interactId = e.pointerId;
           pressed.KeyR = true;
+          if (MP && MP.connected && !MP.isHost && MP.socket && MP.socket.readyState === WebSocket.OPEN) {
+            const boss=enemies.find(q=>q.boss && q.state==='desp_lights' && Array.isArray(q.despLights));
+            if(boss){const near=boss.despLights.map((q,i)=>({i,d:dist(P.x,P.y,q.x,q.y)})).filter(q=>q.d<65).sort((a,b)=>a.d-b.d)[0];
+              if(near)try{MP.socket.send(JSON.stringify({type:'boss-light-interact',id:MP.id,bossId:boss.netId,lightIndex:near.i,roomKey:mpRoomKey()}));}catch{}
+            }
+          }
         } else {
           // Tocar el resto de la pantalla sirve para seleccionar menús y cartas.
           mouse.x = p.x; mouse.y = p.y; mouse.lp = true;
@@ -272,7 +278,7 @@
         if (e.code === 'KeyR' && MP && MP.connected && !MP.isHost && MP.socket && MP.socket.readyState === WebSocket.OPEN) {
           const boss = enemies.find(q => q.boss && q.state === 'desp_lights' && Array.isArray(q.despLights));
           if (boss) { const near = boss.despLights.map((q,i)=>({i,d:dist(P.x,P.y,q.x,q.y)})).filter(q=>q.d<65).sort((a,b)=>a.d-b.d)[0];
-            if (near) { try { MP.socket.send(JSON.stringify({type:'boss-light-interact',bossId:boss.netId,lightIndex:near.i,roomKey:mpRoomKey()})); } catch {} }
+            if (near) { try { MP.socket.send(JSON.stringify({type:'boss-light-interact',id:MP.id,bossId:boss.netId,lightIndex:near.i,roomKey:mpRoomKey()})); } catch {} }
           }
         }
         AudioSys.init(); AudioSys.resume();
