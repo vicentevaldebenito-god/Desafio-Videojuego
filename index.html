@@ -970,7 +970,7 @@
               ignoreArmor: !!o.ignoreArmor, noText: !!o.noText,
               mpDamageMultiplier: P.st.dmg * (1 + 0.3 * chm('might')) *
                 (1 + 0.05 * sr()) * (1 + 0.04 * chm('streak') * streak) *
-                wlv(P.slots[P.weapon]),
+                wlv(P.slots[P.weapon]) * (P.char === 5 && e.marked > 0 ? 1.15 : 1),
               mpLifesteal: Math.max(0, Number(P.st.ls) || 0),
               mpLeech: has('leech'), mpVamp: chm('vamp')
             }
@@ -992,6 +992,7 @@
           if (Math.abs(angDiff(o.ang + Math.PI, e.face)) < 1.2) { m *= (o.armorMul || 0.2); blocked = true; }
         }
         const d = dmg * m;
+        if (o.attackerId) e.lastHitBy = o.attackerId;
         const steal = Number.isFinite(o.mpLifesteal) ? o.mpLifesteal : P.st.ls;
         if (steal > 0 && !P.dead && d > 0 && !(MP && MP.connected && MP.isHost && o.fromMP)) {
           const healed = Math.min(P.maxHp - P.hp, d * Math.max(0, steal));
@@ -1035,7 +1036,8 @@
         let og = e.boss ? 12 : e.mini ? 8 : (Math.random() < (0.3 + 0.2 * chm('greed')) * (1 + 0.5 * style / 100) * (1 + 0.15 * cfg.pres) ? 1 : 0);
         og *= 3; if (og) { AudioSys.sfx('coin'); organs += og; floatText('+' + og + ' ÓRGANO', e.x, e.y - e.r - 28, '#ff8fa3', 12); }
         if (e.mini) { pend++; level++; xpNeed = Math.round(xpNeed * 1.25); if (level === 5 || level === 10 || level === 20) cpend++; banner = { t: 2.6, max: 2.6, l1: '¡MINIJEFE DERROTADO!', l2: 'Subes un nivel' }; AudioSys.sfx('upgrade'); }
-        const lc = has('leech') + 2 * chm('vamp');
+        const guestGotKill = MP && MP.connected && MP.isHost && e.lastHitBy && e.lastHitBy !== MP.id;
+        const lc = guestGotKill ? 0 : has('leech') + 2 * chm('vamp');
         if (lc > 0 && !P.dead) { P.hp = Math.min(P.maxHp, P.hp + 3 * lc); floatText('+' + 3 * lc, P.x, P.y - 28, '#c46bff', 13); }
 
       }
@@ -1966,7 +1968,7 @@
 
       function specialF() {
         const c = P.char; if (!c || P.fcd > 0) return;
-        if (c === 1) { const t = enemies.filter(e => !e.dead && e.spawnT <= 0 && !e.boss && !e.bounty).sort((a, b) => dist(a.x, a.y, P.x, P.y) - dist(b.x, b.y, P.x, P.y)); if (!t.length) return; for (const q of t.slice(0, 1 + (P.path === 'B' ? P.tier : 0))) { q.bounty = true; floatText('¡PRESA MARCADA!', q.x, q.y - 30, '#ffd23f', 16); ring(q.x, q.y, 60, '#ffd23f', 0.5, 4); } }
+        if (c === 1) { const t = enemies.filter(e => !e.dead && e.spawnT <= 0 && !e.boss && !e.bounty).sort((a, b) => dist(a.x, a.y, P.x, P.y) - dist(b.x, b.y, P.x, P.y)); if (!t.length) return; for (const q of t.slice(0, 1 + (P.path === 'B' ? P.tier : 0))) { q.bounty = true; mpSyncEnemyStatus(q, 'bounty'); floatText('¡PRESA MARCADA!', q.x, q.y - 30, '#ffd23f', 16); ring(q.x, q.y, 60, '#ffd23f', 0.5, 4); } }
         else if (c === 2) { const nB = 3 + (P.path === 'A' ? 2 * P.tier : 0), big = P.path === 'B' ? 1 + 0.5 * P.tier : 1; for (let i = 0; i < nB; i++) bots.push({ x: P.x + rand(-30, 30), y: P.y + rand(-30, 30), t: 12 + (P.path === 'B' ? 3 * P.tier : 0), cd: 0, a: i * TAU / nB, big }); ring(P.x, P.y, 80, '#6ae0ff', 0.5, 4); }
         else if (c === 3) { if (P.path === 'B') { P.invT = 2 + 0.5 * P.tier; P.vulnT = 0; } else P.aggro = 5; ring(P.x, P.y, 300, '#ff9a5a', 0.6, 6); shake(10); }
         else if (c === 4) { const fr = 0.5 + (P.path === 'A' ? 0.15 * P.tier : 0); P.hp = Math.min(P.maxHp, P.hp + P.maxHp * fr); floatText('+' + Math.round(P.maxHp * fr), P.x, P.y - 40, '#7dff6a', 20); ring(P.x, P.y, 120, '#7dff6a', 0.6, 5); if (P.path === 'B') { P.shield += P.tier; P.iframes = Math.max(P.iframes, P.tier); } }
@@ -2026,6 +2028,7 @@
               hurtEnemy(e, 115 + 25 * P.tier, { ignoreArmor:true });
               const a = Math.atan2(e.y-P.y,e.x-P.x), force = e.boss ? 180 : 650;
               e.vx += Math.cos(a)*force; e.vy += Math.sin(a)*force;
+              if (MP && MP.connected && !MP.isHost) mpSyncEnemyStatus(e, 'knockback', { pushX: Math.cos(a)*force, pushY: Math.sin(a)*force });
               if (!e.boss) { e.stun = Math.max(e.stun || 0,0.35); mpSyncEnemyStatus(e, 'stun', { duration: 0.35 }); }
             }
           }
@@ -3952,7 +3955,8 @@ maxRank = Math.max(maxRank, sr()); ambT -= dt; if (ambT <= 0) { ambT = rand(9, 2
             if (!sender || sender.dead || sender.roomKey !== mpRoomKey() ||
                 performance.now() - sender.lastSeen > 1500 || !enemy) return;
             const duration = clamp(Number(data.duration) || 0, 0, 12);
-            if (data.status === 'mark') enemy.marked = Math.max(enemy.marked || 0, duration);
+            if (data.status === 'bounty') enemy.bounty = true;
+            else if (data.status === 'mark') enemy.marked = Math.max(enemy.marked || 0, duration);
             else if (data.status === 'stun') {
               enemy.stun = Math.max(enemy.stun || 0, duration);
               enemy.slow = Math.max(enemy.slow || 0, clamp(Number(data.slow) || 0, 0, 12));
@@ -3963,6 +3967,9 @@ maxRank = Math.max(maxRank, sr()); ambT -= dt; if (ambT <= 0) { ambT = rand(9, 2
             } else if (data.status === 'vuln' && enemy.boss) {
               enemy.vuln = Math.max(enemy.vuln || 0, duration);
               enemy.slow = Math.max(enemy.slow || 0, clamp(Number(data.slow) || 0, 0, 12));
+            } else if (data.status === 'knockback') {
+              enemy.vx += clamp(Number(data.pushX) || 0, -1200, 1200);
+              enemy.vy += clamp(Number(data.pushY) || 0, -1200, 1200);
             }
             return;
           }
