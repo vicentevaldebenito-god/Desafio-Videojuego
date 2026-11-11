@@ -3730,9 +3730,9 @@ for (const remote of MP.remotePlayers.values()) {
           }
 
           if (data.type === 'revive-hold' && data.targetId === MP.id && data.helperId !== MP.id) {
-            if (!data.roomKey || data.roomKey === mpRoomKey()) {
-              MP.reviveHolds.set(data.helperId, { holding: !!data.holding, at: performance.now() });
-            }
+            // No exigir roomKey aquí: las coordenadas sincronizadas y la distancia
+            // validan que el compañero esté realmente junto al jugador caído.
+            MP.reviveHolds.set(data.helperId, { holding: !!data.holding, at: performance.now() });
             return;
           }
           if (data.type === 'revive-done' && data.targetId !== MP.id) {
@@ -3972,9 +3972,8 @@ for (const remote of MP.remotePlayers.values()) {
       function mpNearDownedTeammate() {
         if (!MP || !MP.connected || !P || P.dead) return false;
         for (const remote of MP.remotePlayers.values()) {
-          if (!remote.dead || remote.roomKey !== mpRoomKey() ||
-              performance.now() - remote.lastSeen > 500) continue;
-          if (dist(P.x, P.y, remote.x, remote.y) <= 115) return true;
+          if (!remote.dead || performance.now() - remote.lastSeen > 1500) continue;
+          if (dist(P.x, P.y, remote.x, remote.y) <= 125) return true;
         }
         return false;
       }
@@ -3997,9 +3996,10 @@ for (const remote of MP.remotePlayers.values()) {
         if (!P.dead) {
           let nearest = null, nearestD = 105;
           for (const remote of MP.remotePlayers.values()) {
-            if (!remote.dead || remote.roomKey !== mpRoomKey() ||
-                performance.now() - remote.lastSeen > 500) continue;
-            const d = dist(P.x, P.y, remote.x, remote.y);
+            if (!remote.dead || performance.now() - remote.lastSeen > 1500) continue;
+            const rx = Number.isFinite(remote.x) ? remote.x : remote.tx;
+            const ry = Number.isFinite(remote.y) ? remote.y : remote.ty;
+            const d = dist(P.x, P.y, rx, ry);
             if (d < nearestD) { nearest = remote; nearestD = d; }
           }
           const targetId = keys.KeyF && nearest ? nearest.id : null;
@@ -4020,10 +4020,10 @@ for (const remote of MP.remotePlayers.values()) {
           let helper = null;
           for (const [id, hold] of MP.reviveHolds) {
             const remote = MP.remotePlayers.get(id);
-            if (!hold.holding || performance.now() - hold.at > 350 ||
-                !remote || remote.dead || remote.roomKey !== mpRoomKey() ||
-                performance.now() - remote.lastSeen > 500 ||
-                dist(P.x, P.y, remote.x, remote.y) > 110) continue;
+            if (!hold.holding || performance.now() - hold.at > 1000 ||
+                !remote || remote.dead ||
+                performance.now() - remote.lastSeen > 1500 ||
+                dist(P.x, P.y, remote.x, remote.y) > 130) continue;
             helper = remote;
             break;
           }
