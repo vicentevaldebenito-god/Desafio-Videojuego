@@ -746,7 +746,8 @@
         floatText('-' + Math.round(dmg), p.x, p.y - 26, '#ff5a5a', 20);
         combo = 0;
         if (p.hp <= 0) {
-          p.hp = 0; p.dead = true; p.deadT = 1.5;
+          p.hp = 0; p.dead = true; p.deadT = MP && MP.connected ? 30 : 1.5;
+          p.deadAt = Date.now();
           boomFx(p.x, p.y, 110, '#ff5a5a', '#1fa89a'); shake(22); hitstop = 0.25; AudioSys.sfx('boom', true); AudioSys.sfx('lose');
         }
       }
@@ -2123,6 +2124,7 @@
 
       function updatePlaying(dt) {
         runTime += dt;
+        if (MP.connected) mpUpdateRevives(dt);
         if ((pressed.Escape || pressed.KeyP) && (!MP.connected || MP.isHost)) { state = 'paused'; return; }
         updatePlayer(dt); updateXW(dt); updateParry(dt); inkT = Math.max(0, inkT - dt); if (mouse.l && enemies.length) { shootAcc += dt; if (shootAcc > 0.6) { shootAcc = 0; addStyle(1.5, 'DISPARO'); } } rankPop = Math.max(0, rankPop - dt * 2.5);
         P.fcd = Math.max(0, (P.fcd || 0) - dt); if (pressed.KeyF && P.char) specialF(); P.aggro = Math.max(0, (P.aggro || 0) - dt);
@@ -2163,7 +2165,27 @@
         if (hint > 0) hint -= dt;
         // alerta de baja vida
         if (!P.dead && P.hp <= 30) { P.lowT -= dt; if (P.lowT <= 0) { AudioSys.sfx('alarm'); P.lowT = 0.9; } }
-        if (P.dead) { P.deadT -= dt; if (P.deadT <= 0) endRun(false); }
+        if (P.dead) {
+          if (!MP.connected) {
+            P.deadT -= dt;
+            if (P.deadT <= 0) endRun(false);
+          } else {
+            P.deadT = Math.max(0, 30 - (Date.now() - (P.deadAt || Date.now())) / 1000);
+            if (MP.isHost) {
+              const liveRemotes = [...MP.remotePlayers.values()].filter(q =>
+                q.roomKey === mpRoomKey() && Date.now() - q.lastSeen < 1500
+              );
+              const everyoneKnown = liveRemotes.length >= Math.max(0, MP.players - 1);
+              if (everyoneKnown && liveRemotes.every(q => q.dead)) endRun(false);
+            }
+          }
+        } else if (MP.connected && MP.isHost) {
+          const liveRemotes = [...MP.remotePlayers.values()].filter(q =>
+            q.roomKey === mpRoomKey() && Date.now() - q.lastSeen < 1500
+          );
+          if (liveRemotes.length >= Math.max(0, MP.players - 1) &&
+              liveRemotes.length > 0 && liveRemotes.every(q => q.dead)) endRun(false);
+        }
         // sonar ambiental
         ambPing -= dt; if (ambPing <= 0) { AudioSys.sfx('ping'); ambPing = rand(9, 16); }
         // burbujas ambientales
@@ -2779,7 +2801,18 @@ for (const remote of MP.remotePlayers.values()) {
       function drawHUD() {
         if (!P) return; hudExtra();
         if (MP && MP.connected) {
-          let yy = 118;
+          if (P.dead) {
+            const left = Math.max(0, 30 - (Date.now() - (P.deadAt || Date.now())) / 1000);
+            panel(W / 2 - 190, 104, 380, 74);
+            txt('CAÍDO · ESPERANDO REVIVIR', W / 2, 127, 17, '#ff6b6b', 'center', 8);
+            bar(W / 2 - 160, 143, 320, 9, MP.reviveProgress / 10, '#7dff6a');
+            txt('MANTÉN F CERCA · ' + Math.ceil(left) + 's', W / 2, 166, 12, '#fff', 'center');
+          } else if (MP.reviveProgressTarget) {
+            panel(W / 2 - 170, 104, 340, 50);
+            txt('MANTÉN F PARA REVIVIR', W / 2, 124, 15, '#7dff6a', 'center', 7);
+            txt('ACÉRCATE AL COMPAÑERO CAÍDO', W / 2, 142, 10, '#d9eaff', 'center');
+          }
+          let yy = 190;
           for (const remote of MP.remotePlayers.values()) {
             if (remote.roomKey !== mpRoomKey()) continue;
             const f = clamp((remote.hp || 0) / Math.max(1, remote.maxHp || 1), 0, 1);
@@ -3111,7 +3144,12 @@ for (const remote of MP.remotePlayers.values()) {
         lastAppliedUpgradeSeq: 0,
         lastUpgradeChoice: null,
         localUpgradeOpen: false,
-        localUpgradeDone: false
+        localUpgradeDone: false,
+        reviveHolds: new Map(),
+        reviveProgress: 0,
+        reviveProgressTarget: null,
+        reviveSendTimer: 0,
+        reviveLastSentTarget: null
       };
 
       let mpOpen = false;
@@ -3302,6 +3340,10 @@ for (const remote of MP.remotePlayers.values()) {
         MP.isHost = false;
         MP.sharedLocked = false;
         MP.remotePlayers.clear();
+        MP.reviveHolds.clear();
+        MP.reviveProgress = 0;
+        MP.reviveProgressTarget = null;
+        MP.reviveLastSentTarget = null;
         MP.remoteBullets = [];
         MP.room = null;
         MP.localUpgradeOpen = false;
@@ -3421,12 +3463,24 @@ for (const remote of MP.remotePlayers.values()) {
             remote.hp = Number(data.hp) || 0;
             remote.maxHp = Number(data.maxHp) || 1;
             remote.dead = !!data.dead;
+            remote.deadAt = Number(data.deadAt) || 0;
             remote.roomKey = data.roomKey || null;
             remote.lastSeen = performance.now();
 
             return;
           }
 
+          if (data.type === 'revive-hold' && data.targetId === MP.id && data.helperId !== MP.id) {
+            if (!data.roomKey || data.roomKey === mpRoomKey()) {
+              MP.reviveHolds.set(data.helperId, { holding: !!data.holding, at: performance.now() });
+            }
+            return;
+          }
+          if (data.type === 'revive-done' && data.targetId !== MP.id) {
+            const revived = MP.remotePlayers.get(data.targetId);
+            if (revived) { revived.dead = false; revived.hp = Number(data.hp) || revived.maxHp * 0.35; }
+            return;
+          }
           if (data.type === 'player-fx' && data.action === 'damage' && data.targetId === MP.id) {
             if (data.roomKey && data.roomKey !== mpRoomKey()) return;
             const damage = Math.min(10000, Math.max(0, Number(data.damage) || 0));
@@ -3531,6 +3585,82 @@ for (const remote of MP.remotePlayers.values()) {
 
       function mpRoomKey() { return `${floorN}:${cell ? cell.x + ',' + cell.y : 'none'}`; }
       function mpClone(value) { try { return JSON.parse(JSON.stringify(value)); } catch { return null; } }
+      function mpSendReviveHold(targetId, holding) {
+        if (!MP.socket || MP.socket.readyState !== WebSocket.OPEN) return;
+        try {
+          MP.socket.send(JSON.stringify({
+            type: 'revive-hold', targetId, helperId: MP.id,
+            holding: !!holding, roomKey: mpRoomKey()
+          }));
+        } catch {}
+      }
+
+      function mpUpdateRevives(dt) {
+        if (!MP.connected || state !== 'playing' || !MP.socket ||
+            MP.socket.readyState !== WebSocket.OPEN) return;
+
+        // Jugador vivo: mantener F cerca de un compañero caído.
+        if (!P.dead) {
+          let nearest = null, nearestD = 105;
+          for (const remote of MP.remotePlayers.values()) {
+            if (!remote.dead || remote.roomKey !== mpRoomKey() ||
+                performance.now() - remote.lastSeen > 500) continue;
+            const d = dist(P.x, P.y, remote.x, remote.y);
+            if (d < nearestD) { nearest = remote; nearestD = d; }
+          }
+          const targetId = keys.KeyF && nearest ? nearest.id : null;
+          MP.reviveSendTimer -= dt;
+          if (MP.reviveSendTimer <= 0 || targetId !== MP.reviveLastSentTarget) {
+            MP.reviveSendTimer = 0.1;
+            if (targetId || MP.reviveLastSentTarget) {
+              mpSendReviveHold(targetId || MP.reviveLastSentTarget, !!targetId);
+            }
+            MP.reviveLastSentTarget = targetId;
+          }
+          MP.reviveProgressTarget = targetId;
+        }
+
+        // El cliente del jugador caído valida distancia y tiempo del rescatista.
+        if (P.dead) {
+          let helper = null;
+          for (const [id, hold] of MP.reviveHolds) {
+            const remote = MP.remotePlayers.get(id);
+            if (!hold.holding || performance.now() - hold.at > 350 ||
+                !remote || remote.dead || remote.roomKey !== mpRoomKey() ||
+                performance.now() - remote.lastSeen > 500 ||
+                dist(P.x, P.y, remote.x, remote.y) > 110) continue;
+            helper = remote;
+            break;
+          }
+          if (helper && Date.now() - (P.deadAt || Date.now()) < 30000) {
+            MP.reviveProgress += dt;
+            MP.reviveProgressTarget = helper.id;
+          } else {
+            MP.reviveProgress = 0;
+            MP.reviveProgressTarget = null;
+          }
+          if (MP.reviveProgress >= 10) {
+            P.dead = false;
+            P.deadT = 0;
+            P.deadAt = 0;
+            P.hp = Math.max(1, Math.round(P.maxHp * 0.35));
+            P.iframes = 2;
+            MP.reviveProgress = 0;
+            MP.reviveHolds.clear();
+            try {
+              MP.socket.send(JSON.stringify({
+                type: 'revive-done', targetId: MP.id, hp: P.hp,
+                roomKey: mpRoomKey()
+              }));
+            } catch {}
+            boomFx(P.x, P.y, 90, '#7dff6a', '#2ee6ff');
+            ring(P.x, P.y, 150, '#7dff6a', 0.8, 5);
+            floatText('¡REVIVIDO!', P.x, P.y - 42, '#7dff6a', 25);
+            AudioSys.sfx('upgrade');
+          }
+        }
+      }
+
       function mpApplyUpgradeChoice(choice) {
         if (!choice || !P || !choice.id) return;
         if (choice.statKey && Number.isFinite(choice.statValue)) {
@@ -3676,6 +3806,7 @@ for (const remote of MP.remotePlayers.values()) {
                 hp: P.hp,
                 maxHp: P.maxHp,
                 dead: P.dead,
+                deadAt: P.dead ? (P.deadAt || Date.now()) : 0,
                 roomKey: mpRoomKey()
               }));
             } catch (error) {
