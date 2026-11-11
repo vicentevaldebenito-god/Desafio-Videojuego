@@ -600,7 +600,10 @@
 
       function newRun() { newRun0(); applyPerks(); applyChar(); }
       function newRun0() {
-        floorN = 1; roomN = 1; genDungeon(); xp = 0; level = 1; xpNeed = 250; pend = 0; exitPortal = null; score = 0; organs = 0; loop = 0; xcd = 0; kills = 0; runTime = 0; combo = 0; comboT = 0; hint = 14; style = 0; maxRank = 0; parryT = 0; parryCd = 0;
+        floorN = 1; roomN = 1;
+        const mpGuestWaitingForWorld = MP && MP.connected && !MP.isHost;
+        if (!mpGuestWaitingForWorld) genDungeon(); else { dun = null; cell = null; }
+        xp = 0; level = 1; xpNeed = 250; pend = 0; exitPortal = null; score = 0; organs = 0; loop = 0; xcd = 0; kills = 0; runTime = 0; combo = 0; comboT = 0; hint = 14; style = 0; maxRank = 0; parryT = 0; parryCd = 0;
         P = {
           x: W / 2, y: H - WALL - 110, vx: 0, vy: 0, r: 14, hp: 100, maxHp: 100, angle: -Math.PI / 2, weapon: 0,
           cd: [0, 0], cdMax: [0.6, 0.05], sec: [0, 0], secMax: [1.6, 4],
@@ -608,7 +611,11 @@
           dashT: 0, dashCd: 0, dashCdMax: 1, dx: 0, dy: -1, iframes: 0, pressure: 0, overheat: false,
           shield: 0, flash: 0, up: {}, ch: {}, slots: ['h', 'a'], arms: ['h', 'a'], hist: [], st: { dmg: 1, rate: 1, heal: 0, ls: 0, spd: 1, xp: 1, econ: 0, size: 1, luck: 0 }, dead: false, deadT: 0, lowT: 0, revealT: 0, kick: 0
         };
-        startRoom();
+        if (!mpGuestWaitingForWorld) startRoom();
+        else {
+          enemies = []; bullets = []; ebullets = []; clouds = []; flares = []; pools = []; pickups = []; texts = []; pings = [];
+          bgCv = null; waveQueue = []; obstacles = []; lights = []; secret = null; chest = null; shopItems = [];
+        }
         state = 'playing'; stateT = 0;
       }
 
@@ -2294,7 +2301,10 @@
             if (Math.random() < dt * 6) addP({ kind: 'bubble', x: rand(0, W), y: H + 10, vx: 0, vy: -rand(40, 110), size: rand(2, 9), life: rand(5, 9), buoy: -10, ph: rand(0, 6), drag: 0.1 });
             if (pressed.KeyH) { AudioSys.sfx('ui'); tutMenu = true; tutPage = 0; }
             else if (pressed.KeyI) { AudioSys.sfx('ui'); infinite = true; pendingStart = 'inf'; charMenu = true; }
-            else if (pressed.Enter || pressed.Space || mouse.lp) { AudioSys.sfx('ui'); infinite = false; pendingStart = 'norm'; charMenu = true; }
+            else if (pressed.Enter || pressed.Space || mouse.lp) {
+              if (MP.connected && !MP.lobbyStarted) { mpToggle(true); mpMessage("TODOS DEBEN PULSAR READY PARA INICIAR"); }
+              else { AudioSys.sfx('ui'); infinite = false; pendingStart = 'norm'; charMenu = true; }
+            }
             break;
           case 'playing': updatePlaying(dt); break;
           case 'paused':
@@ -3244,7 +3254,11 @@ for (const remote of MP.remotePlayers.values()) {
         localClassOpen: false,
         localClassDone: false,
         pendingClassMenu: false,
-        localClassMilestones: new Set()
+        localClassMilestones: new Set(),
+        ready: false,
+        readyIds: [],
+        lobbyStarted: false,
+        initialWorldSent: false
       };
 
       let mpOpen = false;
@@ -3280,7 +3294,10 @@ for (const remote of MP.remotePlayers.values()) {
         <div id="mp-status">DESCONECTADO</div>
         <div id="mp-room"></div>
         <div id="mp-count"></div>
+        <div id="mp-ready-status">ESPERANDO JUGADORES...</div>
     </div>
+
+    <button id="mp-ready" style="display:none">ESTOY LISTO</button>
 
     <div class="mp-separator"></div>
 
@@ -3443,6 +3460,9 @@ for (const remote of MP.remotePlayers.values()) {
         MP.room = null;
         MP.localUpgradeOpen = false;
         MP.localUpgradeDone = false;
+        MP.ready = false; MP.readyIds = []; MP.lobbyStarted = false; MP.initialWorldSent = false;
+        document.getElementById("mp-ready").style.display = "none";
+        document.getElementById("mp-ready-status").textContent = "ESPERANDO JUGADORES...";
         document.getElementById("mp-leave").style.display = "none";
         mpUpdateCount();
         mpMessage(message);
@@ -3463,8 +3483,18 @@ for (const remote of MP.remotePlayers.values()) {
       }
 
       function mpUpdateCount() {
-        document.getElementById("mp-count").textContent =
-          "JUGADORES: " + MP.players + "/4";
+        document.getElementById("mp-count").textContent = "JUGADORES: " + MP.players + "/4";
+      }
+
+      function mpUpdateLobby() {
+        const status = document.getElementById("mp-ready-status");
+        const button = document.getElementById("mp-ready");
+        if (!status || !button) return;
+        const readyCount = MP.readyIds.length;
+        status.textContent = readyCount + "/" + MP.players + " LISTOS" +
+          (MP.players < 2 ? " · ESPERANDO OTRO JUGADOR" : " · TODOS DEBEN ESTAR LISTOS");
+        button.textContent = MP.ready ? "CANCELAR READY" : "ESTOY LISTO";
+        button.disabled = MP.lobbyStarted || !MP.connected;
       }
 
       function mpConnect(code) {
@@ -3477,6 +3507,7 @@ for (const remote of MP.remotePlayers.values()) {
         MP.hostId = null;
         MP.isHost = false;
         MP.sharedLocked = false;
+        MP.ready = false; MP.readyIds = []; MP.lobbyStarted = false; MP.initialWorldSent = false;
         MP.lastUpgradeChoice = null;
         MP.lastAppliedUpgradeSeq = MP.upgradeSeq;
         MP.room = code;
@@ -3499,7 +3530,8 @@ for (const remote of MP.remotePlayers.values()) {
         socket.onopen = () => {
           MP.connected = true;
           document.getElementById("mp-leave").style.display = "block";
-          mpMessage("CONECTADO");
+          document.getElementById("mp-ready").style.display = "block";
+          mpMessage("CONECTADO · SALA DE ESPERA");
         };
 
         socket.onmessage = event => {
@@ -3508,6 +3540,33 @@ for (const remote of MP.remotePlayers.values()) {
           try {
             data = JSON.parse(event.data);
           } catch {
+            return;
+          }
+
+          if (data.type === 'lobby-state') {
+            MP.players = Number(data.players) || 0;
+            MP.hostId = data.hostId || MP.hostId;
+            MP.isHost = MP.id === MP.hostId;
+            MP.readyIds = Array.isArray(data.readyIds) ? data.readyIds : [];
+            MP.ready = MP.readyIds.includes(MP.id);
+            mpUpdateCount();
+            mpUpdateLobby();
+            return;
+          }
+
+          if (data.type === 'lobby-start') {
+            if (MP.lobbyStarted) return;
+            MP.lobbyStarted = true;
+            MP.ready = true;
+            mpUpdateLobby();
+            mpMessage("TODOS LISTOS · INICIANDO INMERSIÓN");
+            mpToggle(false);
+            charMenu = false; pendingStart = null;
+            infinite = false;
+            MP.lastSessionKey = null;
+            MP.initialWorldSent = false;
+            mpWorldTimer = 0;
+            newRun();
             return;
           }
 
@@ -3595,6 +3654,7 @@ for (const remote of MP.remotePlayers.values()) {
             return;
           }
           if (data.type === "world-state" && !MP.isHost) {
+            if (!MP.lobbyStarted) return;
             mpApplyWorld(data);
             return;
           }
@@ -4058,7 +4118,9 @@ for (const remote of MP.remotePlayers.values()) {
         try {
           const upgradeCards = state === 'upgrade' ? cards.map(c => ({ id: c.id, name: c.name, desc: c.desc, col: c.col, icon: c.icon, art: c.art, rar: c.rar || 0, max: c.max || 99, statKey: c.statKey || null, statValue: Number.isFinite(c.statValue) ? c.statValue : null })) : null;
           const revision = ++mpWorldRevision;
-          MP.socket.send(JSON.stringify({ type: 'world-state', revision, gameState: state, upgradeCards, room: revision % 2 === 0 ? room : undefined, enemies: snapshot, ebullets: mpClone(ebullets), pickups: mpClone(pickups), orbs: mpClone(orbs), xp, level, xpNeed, organs, pend, cpend, kills }));
+          const includeRoom = !MP.initialWorldSent || revision % 2 === 0;
+          if (includeRoom) MP.initialWorldSent = true;
+          MP.socket.send(JSON.stringify({ type: 'world-state', revision, gameState: state, upgradeCards, room: includeRoom ? room : undefined, enemies: snapshot, ebullets: mpClone(ebullets), pickups: mpClone(pickups), orbs: mpClone(orbs), xp, level, xpNeed, organs, pend, cpend, kills }));
         } catch (error) {
           console.warn('[MP] Error sincronizando enemigos:', error);
         }
@@ -4174,6 +4236,14 @@ for (const remote of MP.remotePlayers.values()) {
         }
 
         mpConnect(code);
+      };
+
+      document.getElementById("mp-ready").onclick = () => {
+        if (!MP.connected || MP.lobbyStarted || !MP.socket || MP.socket.readyState !== WebSocket.OPEN) return;
+        MP.ready = !MP.ready;
+        mpUpdateLobby();
+        try { MP.socket.send(JSON.stringify({ type: "lobby-ready", ready: MP.ready })); }
+        catch { MP.ready = false; mpUpdateLobby(); }
       };
 
       // Volver al juego
