@@ -153,7 +153,7 @@
           if (!charMenu && !bestMenu && !optMenu && !tutMenu) {
             touchButton(150,615,220,54,'JUGAR','#7dff6a');
             touchButton(390,615,220,54,'PERSONAJES','#8fd8ff');
-            touchButton(630,615,220,54,'BESTIARIO','#ffe94a');
+            touchButton(630,615,220,54,'LOGS','#ffe94a');
             touchButton(870,615,260,54,'MULTIJUGADOR','#2ee6ff');
           } else {
             touchButton(28,640,170,48,'VOLVER','#8fd8ff');
@@ -505,7 +505,7 @@
         { id: 'swift', name: 'ALETAS DE MANTA', col: '#5ad0ff', icon: 'wind', desc: 'Velocidad de movimiento +15%.' },
         { id: 'vital', name: 'CORAZÓN DOBLE', col: '#7dff6a', icon: 'plus', desc: '+60 de vida máxima y curación total.' }
       ];
-      let shopItems = [], shopNear = null, shopExit = false, introDark = 0, style = 0, parryT = 0, parryCd = 0, inkT = 0, dun = null, cell = null, xp = 0, level = 1, xpNeed = 250, pend = 0, exitPortal = null, stillT = 0, streak = 0, streakT = 0, rankPop = 0, styleFeed = [], styleHist = {}, shootAcc = 0, chest = null, lk = null, amalForm = 1, cpend = 0, pendingStart = null, charMenu = false, bots = [], orbs = [], feats = [], orbSnd = 0, optMenu = false, optSel = 0, pity = 0, current = null, bestMenu = false, ambT = 5, maxRank = 0, octo = { happy: 0, say: '', sayT: 0 }, diveT = 0, tutMenu = false;
+      let shopItems = [], shopNear = null, shopExit = false, introDark = 0, style = 0, parryT = 0, parryCd = 0, inkT = 0, dun = null, cell = null, xp = 0, level = 1, xpNeed = 250, pend = 0, exitPortal = null, stillT = 0, streak = 0, streakT = 0, rankPop = 0, styleFeed = [], styleHist = {}, shootAcc = 0, chest = null, lk = null, amalForm = 1, cpend = 0, pendingStart = null, charMenu = false, bots = [], orbs = [], feats = [], orbSnd = 0, optMenu = false, optSel = 0, pity = 0, current = null, bestMenu = false, logsSelected = 0, ambT = 5, maxRank = 0, octo = { happy: 0, say: '', sayT: 0 }, diveT = 0, tutMenu = false;
       const UTIL = [
         { id: 'rrup', name: 'CAJA DE MUTACIONES', col: '#c46bff', icon: 'flask', desc: '+2 rerolls de mejoras: pulsa R en la pantalla de nivel.' },
         { id: 'rrsh', name: 'CORAZÓN DE MERCADER', col: '#ffe94a', icon: 'drop', desc: '+2 rerolls de tienda: pulsa T dentro de la tienda.' },
@@ -2175,11 +2175,66 @@
       ];
       function saveMeta() { try { localStorage.setItem('ar_meta', JSON.stringify(meta)); } catch (e) { } }
       function applyPerks() { for (const p of PERKS) if (meta.kills >= p.k) p.f(); }
+      const LOG_ENTRIES = [
+        { id:'stalker', title:'MERODEADOR TENTACULAR', origin:'Fauna abisal · Depredador común', desc:'Una criatura alargada que se desliza entre las sombras. Sus tentáculos le permiten impulsarse con rapidez y detectar movimiento en el agua.', behavior:'Persigue al buzo sin descanso y se lanza hacia él cuando encuentra una abertura. Es frágil, pero peligroso en grupo.', clue:'No dejes que te rodeen.' },
+        { id:'drone', title:'C-DRON', origin:'Organismo auxiliar · Unidad de apoyo', desc:'Un pequeño organismo flotante rodeado de filamentos luminosos. Parece reaccionar a las señales de otras criaturas.', behavior:'Se mantiene a distancia y dispara proyectiles hacia el buzo. Su movilidad le permite reposicionarse mientras ataca.', clue:'Acércate con cuidado y no pierdas de vista sus disparos.' },
+        { id:'tank', title:'TANQUE CAPARAZÓN', origin:'Fauna acorazada · Unidad pesada', desc:'Un animal robusto protegido por un caparazón grueso y placas superpuestas. Su cuerpo está hecho para resistir impactos.', behavior:'Avanza lentamente y soporta mucho daño. Puede preparar embestidas y ataques de impacto cuando está cerca.', clue:'Aprovecha su lentitud para reposicionarte.' },
+        { id:'dodger', title:'ANGUILA ESQUIVA', origin:'Depredador veloz · Cazador reactivo', desc:'Una anguila flexible de cuerpo segmentado y aletas finas. Su silueta serpenteante dificulta seguirla con la mirada.', behavior:'Se mueve de forma errática y esquiva los proyectiles cercanos con acelerones repentinos. En zonas profundas puede lanzarse directamente contra el buzo.', clue:'Anticipa su trayectoria en vez de perseguirla.' },
+        { id:'spitter', title:'ESCUPIDOR DE PERDIGONES', origin:'Fauna hostil · Artillería biológica', desc:'Una criatura de mandíbula expansiva y espinas externas. Acumula presión en su interior antes de expulsar una descarga.', behavior:'Mantiene distancia y dispara una ráfaga de proyectiles en abanico. Su ataque cubre varias rutas de escape.', clue:'Busca huecos entre los proyectiles y acorta distancia.' },
+        { id:'guardian', title:'GUARDIÁN COLMENA', origin:'Fauna territorial · Soporte', desc:'Un organismo de gran tamaño con un núcleo brillante y apéndices protectores. Su presencia altera el comportamiento de otras criaturas.', behavior:'Puede lanzar proyectiles y apoyar a los enemigos cercanos, restaurando parte de su resistencia. En zonas profundas utiliza misiles guiados.', clue:'Priorízalo antes de que fortalezca al resto.' },
+        { id:'sniper', title:'FRANCOTIRADOR ABISAL', origin:'Depredador de precisión · Tirador', desc:'Una criatura estilizada que observa desde lejos. Su cuerpo concentra energía antes de realizar disparos precisos.', behavior:'Busca una línea de tiro y ataca desde la distancia. Su amenaza aumenta cuando el buzo permanece quieto.', clue:'Muévete constantemente y rompe su línea de tiro.' },
+        { id:'bomber', title:'MEDUSA BOMBA', origin:'Cnidario abisal · Amenaza explosiva', desc:'Una medusa de campana luminosa y filamentos sensibles. Su brillo se intensifica cuando se prepara para liberar energía.', behavior:'Se aproxima al buzo y utiliza una detonación de área. Mantén distancia cuando comience a brillar.', clue:'Aléjate en cuanto detectes su carga.' },
+        { id:'phantom', title:'ESPECTRO DEL FONDO', origin:'Entidad abisal · Acechador', desc:'Una presencia translúcida que apenas se distingue del agua oscura. Sus contornos parecen deshacerse y recomponerse.', behavior:'Se desplaza con rapidez y utiliza ataques especiales para sorprender al buzo. No siempre es fácil seguir su posición.', clue:'Observa sus destellos y evita quedarte aislado.' },
+        { id:'boss', title:'LEVIATÁN', origin:'Entidad colosal · Jefe abisal', desc:'Una criatura gigantesca que domina las cámaras profundas. Su anatomía está adaptada para soportar daño y controlar grandes espacios.', behavior:'Alterna patrones de proyectiles, embestidas y fases especiales. Cuando entra en desesperación, debes sobrevivir a toda la secuencia antes de poder derrotarlo.', clue:'Lee las señales de cada ataque y no desperdicies oportunidades.' }
+      ];
+      function updateLogs() {
+        if (pressed.Escape || pressed.KeyB) { bestMenu = false; return; }
+        if (pressed.ArrowUp || pressed.KeyW) logsSelected = (logsSelected + LOG_ENTRIES.length - 1) % LOG_ENTRIES.length;
+        if (pressed.ArrowDown || pressed.KeyS) logsSelected = (logsSelected + 1) % LOG_ENTRIES.length;
+        if (mouse.lp) {
+          const x=mouse.x, y=mouse.y;
+          if (x<210 && y>620) { bestMenu=false; return; }
+          if (x>=55 && x<=445 && y>=145 && y<645) logsSelected=clamp(Math.floor((y-151)/49),0,LOG_ENTRIES.length-1);
+        }
+      }
+      function drawLogParagraph(str,x,y,maxW,lineH,size,color) {
+        ctx.save(); ctx.font=size+'px Arial'; ctx.fillStyle=color; ctx.textAlign='left';
+        const words=str.split(' '); let line='', yy=y;
+        for(const word of words){const test=line?line+' '+word:word;if(ctx.measureText(test).width>maxW&&line){ctx.fillText(line,x,yy);line=word;yy+=lineH;}else line=test;}
+        if(line)ctx.fillText(line,x,yy);ctx.restore();
+      }
       function drawBest() {
-        dim(0.9); txt('BESTIARIO DEL ABISMO', W / 2, 80, 36, '#8fd8ff', 'center', 14); txt('Esc / B: cerrar · Total de bajas: ' + meta.kills + ' · Inmersiones: ' + meta.runs, W / 2, 112, 15, '#cfe0f0', 'center');
-        ['stalker', 'drone', 'tank', 'dodger', 'spitter', 'guardian', 'sniper', 'bomber', 'phantom', 'boss'].forEach((t, i) => { const y = 150 + i * 48, n = meta.t[t] || 0, c = ET[t].color; ctx.fillStyle = 'rgba(8,24,40,.9)'; ctx.fillRect(80, y, 520, 40); ctx.strokeStyle = n ? c : '#26384a'; ctx.lineWidth = 2; ctx.strokeRect(80, y, 520, 40); ctx.fillStyle = n ? c : '#26384a'; ctx.beginPath(); ctx.arc(106, y + 20, 10, 0, TAU); ctx.fill(); txt(n ? ET[t].name : '???', 130, y + 26, 15, n ? c : '#5a6f85', 'left'); txt(n + ' abatidos', 580, y + 26, 14, '#fff', 'right'); });
-        txt('VENTAJAS PERMANENTES', 680, 150, 18, '#ffe94a', 'left');
-        PERKS.forEach((p, i) => { const y = 170 + i * 64, ok = meta.kills >= p.k; ctx.fillStyle = 'rgba(8,24,40,.9)'; ctx.fillRect(680, y, 520, 56); ctx.strokeStyle = ok ? '#7dff6a' : '#26384a'; ctx.lineWidth = 2; ctx.strokeRect(680, y, 520, 56); txt(p.n + (ok ? '  ✔' : ''), 696, y + 24, 15, ok ? '#7dff6a' : '#5a6f85', 'left'); txt(ok ? p.d : 'Se desbloquea con ' + p.k + ' bajas (' + Math.min(meta.kills, p.k) + '/' + p.k + ')', 696, y + 44, 12, ok ? '#cfe0f0' : '#5a6f85', 'left'); });
+        const entry=LOG_ENTRIES[logsSelected]||LOG_ENTRIES[0], killsHere=meta.t[entry.id]||0, col=ET[entry.id].color;
+        dim(0.94);
+        txt('LOGS DEL ABISMO',W/2,66,36,'#8fd8ff','center',14);
+        txt('ARCHIVO DE CAMPO  /  REGISTROS DE CRIATURAS',W/2,96,12,'#739bb6','center');
+        txt('ESC / B: CERRAR  ·  ↑ ↓: EXPLORAR  ·  CLIC: SELECCIONAR',W/2,121,12,'#cfe0f0','center');
+        ctx.fillStyle='rgba(4,15,28,.94)';ctx.fillRect(48,145,398,510);ctx.strokeStyle='#28485f';ctx.lineWidth=2;ctx.strokeRect(48,145,398,510);
+        LOG_ENTRIES.forEach((it,i)=>{
+          const y=151+i*49,active=i===logsSelected,n=meta.t[it.id]||0,c=ET[it.id].color;
+          ctx.fillStyle=active?'rgba(30,75,100,.8)':'rgba(8,24,40,.68)';ctx.fillRect(56,y,382,44);
+          ctx.strokeStyle=active?c:'#20394d';ctx.lineWidth=active?2.5:1;ctx.strokeRect(56,y,382,44);
+          ctx.fillStyle=c;ctx.beginPath();ctx.arc(76,y+22,7,0,TAU);ctx.fill();
+          txt(String(i+1).padStart(2,'0'),98,y+17,10,'#7899ad','left');
+          txt(it.title,120,y+26,active?12:11,active?'#ffffff':'#9bb2c4','left');
+          txt(n+' BAJAS',425,y+26,9,n?'#a8e8c5':'#607486','right');
+        });
+        ctx.fillStyle='rgba(4,15,28,.94)';ctx.fillRect(466,145,766,510);ctx.strokeStyle=col;ctx.lineWidth=2;ctx.strokeRect(466,145,766,510);
+        txt('REGISTRO Nº '+String(logsSelected+1).padStart(2,'0'),492,174,11,col,'left');
+        txt(entry.title,492,211,23,'#e7f6ff','left',8);
+        txt(entry.origin.toUpperCase(),492,237,11,col,'left');
+        ctx.save();ctx.fillStyle='rgba(12,34,52,.88)';ctx.fillRect(492,258,270,230);ctx.strokeStyle='rgba(125,190,220,.35)';ctx.lineWidth=1.5;ctx.strokeRect(492,258,270,230);
+        ctx.fillStyle='rgba(125,190,220,.65)';ctx.font='10px Consolas';ctx.textAlign='left';ctx.fillText('MUESTRA VISUAL',507,278);
+        const sample={type:entry.id,x:627,y:377,r:entry.id==='boss'?65:Math.max(24,ET[entry.id].r*2.05),hp:ET[entry.id].hp,maxHp:ET[entry.id].hp,t:time,face:-0.18,state:'idle',spawnT:0,spawnMax:1,flash:0,slow:0,burn:0,blind:0,marked:0,stun:0,corrode:0,corrodeT:0,hitCd:0,boss:entry.id==='boss',mini:false,shield:0,vuln:0,vulnT:0,parryT:0,dodgeT:0,reflect:0,ecd:0};
+        ctx.beginPath();ctx.rect(493,279,268,208);ctx.clip();drawEnemy(sample);ctx.restore();
+        txt('ESTADO DEL REGISTRO',790,273,11,'#7f9db2','left');txt('DOCUMENTADO',1208,273,10,'#7dffb0','right');
+        txt('DESCRIPCIÓN',790,310,12,col,'left');drawLogParagraph(entry.desc,790,337,410,19,14,'#d2e4ef');
+        txt('COMPORTAMIENTO',790,405,12,col,'left');drawLogParagraph(entry.behavior,790,432,410,19,14,'#d2e4ef');
+        ctx.fillStyle='rgba(255,55,70,.09)';ctx.fillRect(790,526,414,48);ctx.strokeStyle='rgba(255,75,85,.35)';ctx.strokeRect(790,526,414,48);
+        txt('NOTA DE SUPERVIVENCIA',804,545,10,'#ff7882','left');txt(entry.clue,804,563,12,'#f1cbd0','left');
+        txt('BAJAS REGISTRADAS: '+killsHere+'   ·   INMERSIONES: '+meta.runs,492,625,11,'#8ba9bd','left');
+        txt('VENTAJAS PERMANENTES',790,603,10,'#ffe18a','left');
+        PERKS.forEach((p,i)=>{const ok=meta.kills>=p.k;txt(p.n,790+i*82,628,8,ok?'#7dffb0':'#61778a','left');});
       }
       function drawSummary() {
         const x = W - 340, y = 140, RL = ['D', 'C', 'B', 'A', 'S', 'SS', 'SSS']; ctx.fillStyle = 'rgba(6,18,32,.92)'; ctx.fillRect(x, y, 310, 420); ctx.strokeStyle = '#8fd8ff'; ctx.lineWidth = 2; ctx.strokeRect(x, y, 310, 420); txt('RESUMEN DE LA INMERSIÓN', x + 155, y + 30, 15, '#8fd8ff', 'center', 6);
@@ -2790,7 +2845,7 @@ maxRank = Math.max(maxRank, sr()); ambT -= dt; if (ambT <= 0) { ambT = rand(9, 2
               break;
             }
             if (tutMenu) { updateTut(); break; }
-            if (bestMenu) { if (pressed.Escape || pressed.KeyB || mouse.lp) bestMenu = false; break; }
+            if (bestMenu) { updateLogs(); break; }
             if (charMenu) { updateChar(); break; }
             if (pressed.KeyC) { charMenu = true; break; }
             if (pressed.KeyB) { bestMenu = true; break; }
@@ -3742,7 +3797,7 @@ maxRank = Math.max(maxRank, sr()); ambT -= dt; if (ambT <= 0) { ambT = rand(9, 2
           if (bestMenu) drawBest();
           if (charMenu) drawChar();
           if (!tutMenu && !bestMenu && !optMenu && !charMenu) {
-            txt('[I] INFINITO · [H] TUTORIAL · [B] BESTIARIO · [O] OPCIONES · [C] PERSONAJE · [E] MULTIJUGADOR', W / 2, H - 40, 14, '#ff4fd8', 'center', 8);
+            txt('[I] INFINITO · [H] TUTORIAL · [B] LOGS · [O] OPCIONES · [C] PERSONAJE · [E] MULTIJUGADOR', W / 2, H - 40, 14, '#ff4fd8', 'center', 8);
           }
           drawFX();
           drawCursor();
