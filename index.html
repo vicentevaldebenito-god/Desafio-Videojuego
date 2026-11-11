@@ -1488,8 +1488,25 @@
               if (e.dead || e.spawnT > 0) continue;
               if (dist(b.x, b.y, e.x, e.y) < e.r + b.r) { hurtEnemy(e, b.dmg * 1.4, { ignoreArmor: true }); kill = true; spark(b.x, b.y, 6, '#e8ff4a', 220); break; }
             }
-          } else if ((!MP || !MP.connected || MP.isHost) && P.iframes <= 0 && !P.dead && dist(b.x, b.y, P.x, P.y) < P.r + b.r) {
-            hurtPlayer(b.dmg, Math.atan2(b.vy, b.vx)); kill = true; spark(b.x, b.y, 6, b.col, 220);
+          } else if (!MP || !MP.connected || MP.isHost) {
+            const targets = [];
+            if (!P.dead && P.iframes <= 0) targets.push(P);
+            if (MP && MP.connected) {
+              for (const remote of MP.remotePlayers.values()) {
+                if (remote.dead || remote.iframes > 0) continue;
+                if (remote.roomKey && remote.roomKey !== mpRoomKey()) continue;
+                if (performance.now() - (remote.lastSeen || 0) > 1500) continue;
+                targets.push(remote);
+              }
+            }
+            const hitTarget = targets
+              .filter(player => dist(b.x, b.y, player.x, player.y) < player.r + b.r)
+              .sort((a, c) => dist(b.x, b.y, a.x, a.y) - dist(b.x, b.y, c.x, c.y))[0];
+            if (hitTarget) {
+              hurtEnemyTargetPlayer(hitTarget, b.dmg, Math.atan2(b.vy, b.vx));
+              kill = true;
+              spark(b.x, b.y, 6, b.col, 220);
+            }
           }
           if (kill) { ebullets[i] = ebullets[ebullets.length - 1]; ebullets.pop(); }
         }
