@@ -3175,7 +3175,7 @@ for (const remote of MP.remotePlayers.values()) {
       const mpNameInput = document.getElementById("mp-name");
       const MP_NAME_KEY = "abyssal-redo-player-name";
       function mpCleanName(value) {
-        const clean = String(value || "").replace(/[<>\\r\\n]/g, "").trim().slice(0, 16);
+        const clean = String(value || "").replace(/[<>\r\n]/g, "").trim().slice(0, 16);
         return clean || "Jugador";
       }
       let mpPlayerName = mpCleanName(localStorage.getItem(MP_NAME_KEY) || "Jugador");
