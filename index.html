@@ -1488,7 +1488,7 @@
               if (e.dead || e.spawnT > 0) continue;
               if (dist(b.x, b.y, e.x, e.y) < e.r + b.r) { hurtEnemy(e, b.dmg * 1.4, { ignoreArmor: true }); kill = true; spark(b.x, b.y, 6, '#e8ff4a', 220); break; }
             }
-          } else if (P.iframes <= 0 && !P.dead && dist(b.x, b.y, P.x, P.y) < P.r + b.r) {
+          } else if ((!MP || !MP.connected || MP.isHost) && P.iframes <= 0 && !P.dead && dist(b.x, b.y, P.x, P.y) < P.r + b.r) {
             hurtPlayer(b.dmg, Math.atan2(b.vy, b.vx)); kill = true; spark(b.x, b.y, 6, b.col, 220);
           }
           if (kill) { ebullets[i] = ebullets[ebullets.length - 1]; ebullets.pop(); }
@@ -2115,7 +2115,7 @@
           b.t -= dt; b.cd -= dt;
           const candidates = enemies.filter(e => !e.dead && e.spawnT <= 0);
           let tg = candidates.filter(e => !botTargets.has(e)).sort((a, c) => dist(a.x, a.y, b.x, b.y) - dist(c.x, c.y, b.x, b.y))[0];
-          if (!tg) tg = candidates.sort((a, c) => dist(a.x, a.y, b.x, b.y) - dist(c.x, c.x, b.x, b.y))[0];
+          if (!tg) tg = candidates.sort((a, c) => dist(a.x, a.y, b.x, b.y) - dist(c.x, c.y, b.x, b.y))[0];
           if (tg) {
             botTargets.add(tg);
             const dd = dist(b.x, b.y, tg.x, tg.y) || 1;
