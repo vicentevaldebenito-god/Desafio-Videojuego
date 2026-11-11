@@ -3184,6 +3184,9 @@ for (const remote of MP.remotePlayers.values()) {
         MP.players = 0;
         MP.hostId = null;
         MP.isHost = false;
+        MP.sharedLocked = false;
+        MP.lastUpgradeChoice = null;
+        MP.lastAppliedUpgradeSeq = MP.upgradeSeq;
         MP.room = code;
         MP.remotePlayers.clear();
         MP.syncTimer = 0;
@@ -3270,11 +3273,13 @@ for (const remote of MP.remotePlayers.values()) {
             return;
           }
           if (data.type === 'enemy-hit' && MP.isHost) {
+            if (state !== 'playing') return;
             const target = enemies.find(e => e.netId === data.netId && !e.dead);
             if (target && Number.isFinite(Number(data.damage))) hurtEnemy(target, Math.min(100000, Math.max(0, Number(data.damage))), { ...(data.options || {}), fromMP: true });
             return;
           }
           if (data.type === 'xp-request' && MP.isHost) {
+            if (state !== 'playing') return;
             const amount = Math.min(10000, Math.max(0, Number(data.amount) || 0));
             if (amount > 0) addXP(amount);
             return;
@@ -3433,6 +3438,8 @@ for (const remote of MP.remotePlayers.values()) {
         try {
           const upgradeCards = state === 'upgrade' ? cards.map(c => ({ id: c.id, name: c.name, desc: c.desc, col: c.col, icon: c.icon, art: c.art, rar: c.rar || 0, max: c.max || 99, statKey: c.statKey || null, statValue: Number.isFinite(c.statValue) ? c.statValue : null })) : null;
           MP.socket.send(JSON.stringify({ type: 'world-state', revision: ++mpWorldRevision, gameState: state, upgradeCards, upgradeChoice: MP.lastUpgradeChoice, room, enemies: snapshot, ebullets: mpClone(ebullets), pickups: mpClone(pickups), orbs: mpClone(orbs), xp, level, xpNeed, organs, pend, cpend, kills }));
+          // La elección se envía una sola vez para no repetirla a nuevos invitados.
+          MP.lastUpgradeChoice = null;
         } catch (error) {
           console.warn('[MP] Error sincronizando enemigos:', error);
         }
