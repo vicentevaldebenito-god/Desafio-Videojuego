@@ -138,7 +138,7 @@
       window.addEventListener('blur', () => {
         for (const k in keys) keys[k] = false;
         mouse.l = mouse.r = false;
-        if (state === 'playing') state = 'paused';
+        if (state === 'playing' && (!MP || !MP.connected || MP.isHost)) state = 'paused';
       });
 
       /* ---------------------------------------------------------------------
@@ -1539,7 +1539,7 @@
       function statCard(st) {
         const r = Math.random() / ((1 + P.st.luck) * (1 + 0.06 * pity)), rar = r < 0.0001 ? 3 : r < 0.0051 ? 2 : r < 0.0551 ? 1 : 0, cur = P.st[st.k], nv = statNew(st, rar, cur), f = v => ADD[st.k] ? Math.round(v * 100) + '%' : 'x' + v.toFixed(2);
         pity = rar === 0 ? pity + 1 : 0;
-        return { id: st.id, art: st.art, icon: st.icon, max: 99, rar, col: RC4[rar], name: ['', 'RARA · ', 'ÉPICA · ', 'LEGENDARIA · '][rar] + st.name, desc: st.label + ': ' + f(cur) + ' → ' + f(nv), apply() { P.st[st.k] = nv; } };
+        return { id: st.id, art: st.art, icon: st.icon, max: 99, rar, col: RC4[rar], name: ['', 'RARA · ', 'ÉPICA · ', 'LEGENDARIA · '][rar] + st.name, desc: st.label + ': ' + f(cur) + ' → ' + f(nv), statKey: st.k, statValue: nv, apply() { P.st[st.k] = nv; } };
       }
 
       const WN = { h: 'ARPÓN CINÉTICO', a: 'DISPERSOR BIOLUMINISCENTE', anchor: 'ANCLA GRAVITATORIA', medusa: 'LANZAMEDUSAS', mine: 'MINAS DE CORAL', saw: 'SIERRAS ORBITALES' }, WC = { h: '#9fd0ff', a: '#b6ff3b', anchor: '#b66bff', medusa: '#7affd8', mine: '#7dff6a', saw: '#ffb13b' }, CDX = { anchor: 4, medusa: 0.9, mine: 0.6, saw: 8 };
@@ -1852,6 +1852,14 @@
         P.hist.push({ id: u.id, name: u.name, col: u.col, stat: STATS.find(q => q.id === u.id) || null, rar: u.rar || 0 });
         AudioSys.sfx('upgrade');
         P.hp = Math.min(P.maxHp, P.hp + Math.round(P.maxHp * (0.1 + P.st.heal)));
+        if (MP && MP.connected && MP.isHost) {
+          MP.upgradeSeq++;
+          MP.lastUpgradeChoice = {
+            seq: MP.upgradeSeq, id: u.id, name: u.name, col: u.col,
+            rar: u.rar || 0, statKey: u.statKey || null,
+            statValue: Number.isFinite(u.statValue) ? u.statValue : null
+          };
+        }
         state = 'playing';
       }
       function endRun(win) {
@@ -2031,6 +2039,7 @@
         cards.forEach((c, i) => { const x = x0 + i * (cw + gap); if (mouse.x > x && mouse.x < x + cw && mouse.y > 150 && mouse.y < 570) hover = i; });
         cards.hover = hover;
         if (stateT > 0.25) {
+          if (MP.connected && !MP.isHost) return;
           if (pressed.KeyR && P.rr > 0) { P.rr--; openUpgrades(); return; }
           if (pressed.Digit1 && cards[0]) chooseUpgrade(cards[0]);
           else if (pressed.Digit2 && cards[1]) chooseUpgrade(cards[1]);
@@ -2041,7 +2050,7 @@
 
       function updatePlaying(dt) {
         runTime += dt;
-        if (pressed.Escape || pressed.KeyP) { state = 'paused'; return; }
+        if ((pressed.Escape || pressed.KeyP) && (!MP.connected || MP.isHost)) { state = 'paused'; return; }
         updatePlayer(dt); updateXW(dt); updateParry(dt); inkT = Math.max(0, inkT - dt); if (mouse.l && enemies.length) { shootAcc += dt; if (shootAcc > 0.6) { shootAcc = 0; addStyle(1.5, 'DISPARO'); } } rankPop = Math.max(0, rankPop - dt * 2.5);
         P.fcd = Math.max(0, (P.fcd || 0) - dt); if (pressed.KeyF && P.char) specialF(); P.aggro = Math.max(0, (P.aggro || 0) - dt);
         if (P.aggro > 0) for (const e of enemies) if (!e.dead && e.spawnT <= 0 && !e.boss) { const dd = dist(e.x, e.y, P.x, P.y); if (dd < 450 && dd > 30) moveEntity(e, (P.x - e.x) / dd * 90 * dt, (P.y - e.y) / dd * 90 * dt, e.r); }
@@ -2059,8 +2068,8 @@
           else { for (const e of enemies) if (!e.dead && e.spawnT <= 0 && !e.boss) { const dd = dist(e.x, e.y, f.x, f.y); if (dd < 260 && dd > 1) { moveEntity(e, (f.x - e.x) / dd * 70 * dt, (f.y - e.y) / dd * 70 * dt, e.r); if (dd < 50) hurtEnemy(e, 14 * dt, { ignoreArmor: true, noText: true }); } } if (d < 200 && d > 1) moveEntity(P, (f.x - P.x) / d * 40 * dt, (f.y - P.y) / d * 40 * dt, P.r); }
         }
         abyssT += dt; if (!hunter && abyssT > 900) { abyssT = 840; hunter = { x: Math.random() < 0.5 ? WALL : W - WALL, y: rand(WALL, H - WALL), cd: 0, t: 0, warn: 2.5 }; banner = { t: 2.6, max: 2.6, l1: 'ALGO TE ESTÁ CAZANDO', l2: 'El Acechador huele tu demora' }; AudioSys.sfx('roar'); }
-        if (hunter) { hunter.t += dt; if (hunter.warn > 0) hunter.warn -= dt; else { const ha = Math.atan2(P.y - hunter.y, P.x - hunter.x), hs = 190 + 20 * floorN; hunter.x += Math.cos(ha) * hs * dt; hunter.y += Math.sin(ha) * hs * dt; hunter.cd -= dt; if (hunter.cd <= 0 && dist(P.x, P.y, hunter.x, hunter.y) < 46 + P.r) { hurtPlayer(25, ha); hunter.cd = 1; } if (hunter.t > 45) hunter = null; } } maxRank = Math.max(maxRank, sr()); ambT -= dt; if (ambT <= 0) { ambT = rand(9, 20); AudioSys.sfx(['whale', 'creak', 'drip'][Math.floor(Math.random() * 3)]); } for (const q of enemies) if (q.af === 'regen' && !q.dead) q.hp = Math.min(q.maxHp, q.hp + q.maxHp * 0.04 * dt); if (current && !P.dead) moveEntity(P, Math.cos(current.a) * current.f * dt, Math.sin(current.a) * current.f * dt, P.r); octo.happy = Math.max(0, octo.happy - dt); octo.sayT -= dt; for (const q of styleFeed) q.life -= dt; styleFeed = styleFeed.filter(q => q.life > 0); for (const q of enemies) if (q.mini || q.boss) { q.pinned = null; q.impaled = null; q.pull = false; q.stun = 0; } if (pend > 0 && !P.dead) { pend--; openUpgrades(); }
-        if (cpend > 0 && state === 'playing' && !P.dead) { cpend--; if (!P.path) { state = 'class'; AudioSys.sfx('upgrade'); } else { P.tier++; banner = { t: 2.6, max: 2.6, l1: 'MEJORA DE CLASE', l2: CPATH[P.char][P.path === 'A' ? 0 : 1].n + ' · nivel ' + P.tier }; AudioSys.sfx('upgrade'); } }
+        if (hunter) { hunter.t += dt; if (hunter.warn > 0) hunter.warn -= dt; else { const ha = Math.atan2(P.y - hunter.y, P.x - hunter.x), hs = 190 + 20 * floorN; hunter.x += Math.cos(ha) * hs * dt; hunter.y += Math.sin(ha) * hs * dt; hunter.cd -= dt; if (hunter.cd <= 0 && dist(P.x, P.y, hunter.x, hunter.y) < 46 + P.r) { hurtPlayer(25, ha); hunter.cd = 1; } if (hunter.t > 45) hunter = null; } } maxRank = Math.max(maxRank, sr()); ambT -= dt; if (ambT <= 0) { ambT = rand(9, 20); AudioSys.sfx(['whale', 'creak', 'drip'][Math.floor(Math.random() * 3)]); } for (const q of enemies) if (q.af === 'regen' && !q.dead) q.hp = Math.min(q.maxHp, q.hp + q.maxHp * 0.04 * dt); if (current && !P.dead) moveEntity(P, Math.cos(current.a) * current.f * dt, Math.sin(current.a) * current.f * dt, P.r); octo.happy = Math.max(0, octo.happy - dt); octo.sayT -= dt; for (const q of styleFeed) q.life -= dt; styleFeed = styleFeed.filter(q => q.life > 0); for (const q of enemies) if (q.mini || q.boss) { q.pinned = null; q.impaled = null; q.pull = false; q.stun = 0; } if ((!MP.connected || MP.isHost) && pend > 0 && !P.dead) { pend--; openUpgrades(); }
+        if ((!MP.connected || MP.isHost) && cpend > 0 && state === 'playing' && !P.dead) { cpend--; if (!P.path) { state = 'class'; AudioSys.sfx('upgrade'); } else { P.tier++; banner = { t: 2.6, max: 2.6, l1: 'MEJORA DE CLASE', l2: CPATH[P.char][P.path === 'A' ? 0 : 1].n + ' · nivel ' + P.tier }; AudioSys.sfx('upgrade'); } }
         if (P.invT > 0) { P.invT -= dt; P.iframes = Math.max(P.iframes, 0.1); if (P.invT <= 0) P.vulnT = 5; } if (P.vulnT > 0) P.vulnT -= dt;
         stillT = Math.hypot(P.vx, P.vy) < 8 ? stillT + dt : 0; if (chm('still') && stillT > 1.5 && P.shield < 1 + chm('still')) { P.shield++; stillT = 0; ring(P.x, P.y, 50, '#7ad7ff', 0.3, 3); AudioSys.sfx('rankup'); }
         streakT -= dt; if (streakT <= 0) streak = 0; style = Math.max(0, style - dt * (3 + sr() * 2.5)); introDark = Math.max(0, introDark - dt);
@@ -2081,7 +2090,7 @@
       }
 
       function update(dt) {
-        if (pressed.Tab && P && !P.dead && (state === 'playing' || (state === 'inv' && !invPick))) { state = state === 'inv' ? 'playing' : 'inv'; AudioSys.sfx('invopen'); }
+        if (!(MP && MP.connected && !MP.isHost && MP.sharedLocked) && pressed.Tab && P && !P.dead && (state === 'playing' || (state === 'inv' && !invPick))) { state = state === 'inv' ? 'playing' : 'inv'; AudioSys.sfx('invopen'); }
         time += dt;
         if (pressed.KeyM) AudioSys.toggleMute();
         for (const m of motes) { m.x += Math.sin(time * m.sp + m.ph) * 8 * dt; m.y -= m.v * dt; if (m.y < -10) { m.y = H + 10; m.x = rand(0, W); } }
@@ -2113,8 +2122,11 @@
             break;
           case 'playing': updatePlaying(dt); break;
           case 'paused':
-            if (pressed.Escape || pressed.KeyP) state = 'playing';
-            else if (pressed.KeyX) { state = 'menu'; }
+            // En multijugador solo el anfitrión puede reanudar o abandonar.
+            if (!MP.connected || MP.isHost) {
+              if (pressed.Escape || pressed.KeyP) state = 'playing';
+              else if (pressed.KeyX) { state = 'menu'; }
+            }
             break;
           case 'upgrade': updateUpgrade(dt); break;
           case 'shop': updateShop(dt); break;
@@ -2797,7 +2809,7 @@ for (const remote of MP.remotePlayers.values()) {
       function drawPause() {
         dim(0.6);
         txt('PAUSA', W / 2, 330, 64, '#fff', 'center', 16);
-        txt('[ESC] / [P] REANUDAR     [X] ABANDONAR PARTIDA     [M] SILENCIO', W / 2, 380, 16, '#8fb8d8', 'center');
+        txt(MP && MP.connected && !MP.isHost ? 'ESPERANDO AL ANFITRIÓN...' : '[ESC] / [P] REANUDAR     [X] ABANDONAR PARTIDA     [M] SILENCIO', W / 2, 380, 16, '#8fb8d8', 'center');
       }
 
       function sr() { return Math.min(6, Math.floor(style / 14.3)); }
@@ -2991,7 +3003,11 @@ for (const remote of MP.remotePlayers.values()) {
         syncTimer: 0,
         roomKey: null,
         lastSessionKey: null,
-        remoteBullets: []
+        remoteBullets: [],
+        sharedLocked: false,
+        upgradeSeq: 0,
+        lastAppliedUpgradeSeq: 0,
+        lastUpgradeChoice: null
       };
 
       let mpOpen = false;
@@ -3331,6 +3347,23 @@ for (const remote of MP.remotePlayers.values()) {
 
       function mpRoomKey() { return `${floorN}:${cell ? cell.x + ',' + cell.y : 'none'}`; }
       function mpClone(value) { try { return JSON.parse(JSON.stringify(value)); } catch { return null; } }
+      function mpApplyUpgradeChoice(choice) {
+        if (!choice || !P || !choice.id) return;
+        if (choice.statKey && Number.isFinite(choice.statValue)) {
+          P.st[choice.statKey] = choice.statValue;
+        } else {
+          const base = UPS.find(u => u.id === choice.id);
+          if (base) {
+            P.up[choice.id] = (P.up[choice.id] || 0) + 1;
+            if (base.apply) base.apply();
+          }
+        }
+        if (choice.statKey) P.up[choice.id] = (P.up[choice.id] || 0) + 1;
+        P.hist.push({ id: choice.id, name: choice.name || choice.id, col: choice.col || '#8fb8d8', stat: STATS.find(q => q.id === choice.id) || null, rar: choice.rar || 0 });
+        P.hp = Math.min(P.maxHp, P.hp + Math.round(P.maxHp * (0.1 + P.st.heal)));
+        AudioSys.sfx('upgrade');
+      }
+
       function mpApplyWorld(data) {
         let roomChanged = false;
         if (data.room) {
@@ -3368,6 +3401,19 @@ for (const remote of MP.remotePlayers.values()) {
         if (Number.isFinite(data.pend)) pend = data.pend;
         if (Number.isFinite(data.cpend)) cpend = data.cpend;
         if (Number.isFinite(data.kills)) kills = data.kills;
+
+        // El estado de juego y las cartas de mejora los decide el anfitrión.
+        if (typeof data.gameState === 'string' && ['playing', 'paused', 'upgrade', 'shop', 'class', 'lock', 'dive', 'gameover', 'victory'].includes(data.gameState)) {
+          state = data.gameState;
+          MP.sharedLocked = state === 'paused' || state === 'upgrade';
+        }
+        if (state === 'upgrade' && Array.isArray(data.upgradeCards)) cards = data.upgradeCards.map(c => ({ ...c }));
+        else if (state !== 'upgrade') cards = [];
+
+        if (data.upgradeChoice && Number(data.upgradeChoice.seq) > MP.lastAppliedUpgradeSeq) {
+          MP.lastAppliedUpgradeSeq = Number(data.upgradeChoice.seq);
+          mpApplyUpgradeChoice(data.upgradeChoice);
+        }
         mpWorldRevision = Number(data.revision) || mpWorldRevision;
       }
 
@@ -3385,7 +3431,8 @@ for (const remote of MP.remotePlayers.values()) {
         });
         const room = { key: mpRoomKey(), floorN, roomN, cellKey: cell ? cell.x + ',' + cell.y : null, dun: mpClone(dun), rs, introT, doorOpen, waveQueue: mpClone(waveQueue), obstacles: mpClone(obstacles), lights: mpClone(lights), feats: mpClone(feats), secret: mpClone(secret), chest: mpClone(chest), exitPortal: mpClone(exitPortal), sidePortal: mpClone(sidePortal) };
         try {
-          MP.socket.send(JSON.stringify({ type: 'world-state', revision: ++mpWorldRevision, room, enemies: snapshot, ebullets: mpClone(ebullets), pickups: mpClone(pickups), orbs: mpClone(orbs), xp, level, xpNeed, organs, pend, cpend, kills }));
+          const upgradeCards = state === 'upgrade' ? cards.map(c => ({ id: c.id, name: c.name, desc: c.desc, col: c.col, icon: c.icon, art: c.art, rar: c.rar || 0, max: c.max || 99, statKey: c.statKey || null, statValue: Number.isFinite(c.statValue) ? c.statValue : null })) : null;
+          MP.socket.send(JSON.stringify({ type: 'world-state', revision: ++mpWorldRevision, gameState: state, upgradeCards, upgradeChoice: MP.lastUpgradeChoice, room, enemies: snapshot, ebullets: mpClone(ebullets), pickups: mpClone(pickups), orbs: mpClone(orbs), xp, level, xpNeed, organs, pend, cpend, kills }));
         } catch (error) {
           console.warn('[MP] Error sincronizando enemigos:', error);
         }
