@@ -3357,6 +3357,9 @@ for (const remote of MP.remotePlayers.values()) {
 
       function mpLeaveRoom(message = "HAS ABANDONADO LA SALA") {
         const socket = MP.socket;
+        if (socket && socket.readyState === WebSocket.OPEN) {
+          try { socket.send(JSON.stringify({ type: "room-leave" })); } catch {}
+        }
         MP.socket = null;
         if (socket && (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING)) {
           try { socket.close(1000, "leave"); } catch {}
