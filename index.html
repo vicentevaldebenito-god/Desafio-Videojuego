@@ -3673,11 +3673,22 @@ for (const remote of MP.remotePlayers.values()) {
           MP.reviveProgressSendTimer = (MP.reviveProgressSendTimer || 0) - dt;
           if (helper && MP.reviveProgressSendTimer <= 0) {
             MP.reviveProgressSendTimer = 0.1;
+            MP.reviveProgressLastHelper = helper.id;
             try {
               MP.socket.send(JSON.stringify({
                 type: 'revive-progress', helperId: helper.id,
                 targetId: MP.id, progress: MP.reviveProgress / 10,
                 roomKey: mpRoomKey()
+              }));
+            } catch {}
+          } else if (!helper && MP.reviveProgressLastHelper) {
+            const previousHelper = MP.reviveProgressLastHelper;
+            MP.reviveProgressLastHelper = null;
+            MP.reviveProgressSendTimer = 0;
+            try {
+              MP.socket.send(JSON.stringify({
+                type: 'revive-progress', helperId: previousHelper,
+                targetId: MP.id, progress: 0, roomKey: mpRoomKey()
               }));
             } catch {}
           }
