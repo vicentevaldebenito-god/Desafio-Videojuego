@@ -2871,6 +2871,26 @@ maxRank = Math.max(maxRank, sr()); ambT -= dt; if (ambT <= 0) { ambT = rand(9, 2
         ctx.drawImage(lightCv, 0, 0, W, H);
       }
 
+      // Barra de 30 segundos para rescatar a un compañero caído.
+      function drawReviveTimer(x, y, deadAt) {
+        const remaining = clamp(30 - (Date.now() - (Number(deadAt) || Date.now())) / 1000, 0, 30);
+        const ratio = remaining / 30;
+        const w = 54, h = 6, left = x - w / 2;
+        ctx.save();
+        ctx.globalAlpha = 0.98;
+        ctx.fillStyle = 'rgba(35, 5, 10, 0.9)';
+        ctx.fillRect(left - 1, y - 1, w + 2, h + 2);
+        ctx.fillStyle = '#58131b';
+        ctx.fillRect(left, y, w, h);
+        ctx.fillStyle = '#ff334f';
+        ctx.shadowColor = '#ff334f';
+        ctx.shadowBlur = 7;
+        ctx.fillRect(left, y, w * ratio, h);
+        ctx.shadowBlur = 0;
+        txt(Math.ceil(remaining) + 's', x, y - 5, 10, '#ff6578', 'center', 4);
+        ctx.restore();
+      }
+
       function drawWorld() {
         const th = THEMES[floorN - 1];
         glowQ = [];
@@ -2885,38 +2905,51 @@ maxRank = Math.max(maxRank, sr()); ambT -= dt; if (ambT <= 0) { ambT = rand(9, 2
         for (const e of enemies) if (e.spawnT <= 0) drawEnemy(e);
         drawFlares();
         drawEBullets();
-        // El cuerpo permanece visible mientras está caído para que el equipo pueda localizarlo y revivirlo.
+        // Jugador local: visible mientras está caído; desaparece al pasar a espectador.
         if (!P.dead || (MP && MP.connected && !P.spectating)) {
           ctx.save();
-          if (P.dead) { ctx.globalAlpha = 0.48; }
+          if (P.dead) ctx.globalAlpha = 0.48;
           drawPlayer();
           ctx.restore();
           if (MP && MP.connected) {
-            txt(P.dead ? 'CAÍDO · ' + mpPlayerName : (MP.isHost ? 'ANFITRIÓN · ' : '') + mpPlayerName,
-              P.x, P.y - P.r - 16, 11, P.dead ? '#ff6b6b' : (MP.isHost ? '#2ee6ff' : '#37ffb0'), 'center', 5);
             if (P.dead) {
-              ctx.save(); ctx.strokeStyle = '#ff6b6b'; ctx.lineWidth = 3;
+              txt('CAÍDO · ' + mpPlayerName, P.x, P.y - P.r - 14, 11, '#ff6b6b', 'center', 5);
+              drawReviveTimer(P.x, P.y - P.r - 30, P.deadAt);
+              ctx.save();
+              ctx.strokeStyle = '#ff6b6b'; ctx.lineWidth = 3;
               ctx.beginPath(); ctx.arc(P.x, P.y, P.r + 9, 0, TAU); ctx.stroke();
               ctx.restore();
+            } else {
+              txt((MP.isHost ? 'ANFITRIÓN · ' : '') + mpPlayerName,
+                P.x, P.y - P.r - 16, 11, MP.isHost ? '#2ee6ff' : '#37ffb0', 'center', 5);
             }
           }
         }
 
-// Dibujar compañeros
-for (const remote of MP.remotePlayers.values()) {
-    if (MP.connected && remote.roomKey !== mpRoomKey()) continue;
-    drawPlayer(remote);
+        // Compañeros: todos ven el estado caído y su temporizador.
+        for (const remote of MP.remotePlayers.values()) {
+          if (MP.connected && remote.roomKey !== mpRoomKey()) continue;
+          // Un jugador eliminado en modo espectador ya no tiene cuerpo en el mundo.
+          if (remote.dead && remote.spectating) continue;
 
-    txt(
-        (remote.isHost ? 'ANFITRIÓN · ' : '') + (remote.name || 'Jugador'),
-        remote.x,
-        remote.y - remote.r - 16,
-        11,
-        remote.isHost ? '#2ee6ff' : '#37ffb0',
-        'center',
-        5
-    );
-}
+          if (remote.dead) {
+            ctx.save(); ctx.globalAlpha = 0.48;
+            drawPlayer(remote);
+            ctx.restore();
+            txt('CAÍDO · ' + (remote.name || 'Jugador'),
+              remote.x, remote.y - remote.r - 14, 11, '#ff6b6b', 'center', 5);
+            drawReviveTimer(remote.x, remote.y - remote.r - 30, remote.deadAt);
+            ctx.save();
+            ctx.strokeStyle = '#ff6b6b'; ctx.lineWidth = 3;
+            ctx.beginPath(); ctx.arc(remote.x, remote.y, remote.r + 9, 0, TAU); ctx.stroke();
+            ctx.restore();
+          } else {
+            drawPlayer(remote);
+            txt((remote.isHost ? 'ANFITRIÓN · ' : '') + (remote.name || 'Jugador'),
+              remote.x, remote.y - remote.r - 16, 11,
+              remote.isHost ? '#2ee6ff' : '#37ffb0', 'center', 5);
+          }
+        }
         drawParts(false);
         drawLightsAndAmbient();
         drawDarkness();
