@@ -3098,6 +3098,7 @@ for (const remote of MP.remotePlayers.values()) {
           "JUGADORES: " + MP.players + "/4";
       }
 
+
       function mpConnect(code) {
         if (MP.socket) {
           MP.socket.close();
@@ -3179,6 +3180,7 @@ for (const remote of MP.remotePlayers.values()) {
 
             return;
           }
+
           if (data.type === "welcome") {
             MP.players = data.players;
             mpUpdateCount();
@@ -3208,6 +3210,68 @@ for (const remote of MP.remotePlayers.values()) {
           mpUpdateCount();
           mpMessage("DESCONECTADO");
         };
+      }
+
+      // ==========================================
+      // SINCRONIZACIÓN MULTIJUGADOR
+      // ==========================================
+
+      function mpSyncUpdate(dt) {
+        if (
+          state === 'playing' &&
+          P &&
+          MP.connected &&
+          MP.socket &&
+          MP.socket.readyState === WebSocket.OPEN
+        ) {
+          MP.syncTimer += dt;
+
+          if (MP.syncTimer >= 0.05) {
+            MP.syncTimer = 0;
+
+            try {
+              MP.socket.send(JSON.stringify({
+                type: 'player-state',
+                id: MP.id,
+                x: P.x,
+                y: P.y,
+                angle: P.angle,
+                r: P.r,
+                weapon: P.weapon,
+                kick: P.kick,
+                dashT: P.dashT,
+                iframes: P.iframes,
+                flash: P.flash,
+                cd0: P.cd[0],
+                shield: P.shield
+              }));
+            } catch (error) {
+              console.warn("[MP] Error enviando posición:", error);
+            }
+          }
+        }
+
+        if (!MP.remotePlayers) return;
+
+        const now = performance.now();
+
+        for (const [id, remote] of MP.remotePlayers) {
+          if (now - remote.lastSeen > 2500) {
+            MP.remotePlayers.delete(id);
+            continue;
+          }
+
+          const k = Math.min(1, dt * 18);
+
+          remote.x += (remote.tx - remote.x) * k;
+          remote.y += (remote.ty - remote.y) * k;
+
+          if (typeof angDiff === "function") {
+            remote.angle += angDiff(remote.ta, remote.angle) * k;
+          } else {
+            remote.angle += (remote.ta - remote.angle) * k;
+          }
+        }
       }
 
       // Crear sala
@@ -3252,7 +3316,10 @@ for (const remote of MP.remotePlayers.values()) {
       };
 
       console.log("ABYSSAL REDO MULTIPLAYER MENU READY");
-      window.addEventListener('keydown', e => { if (e.code === 'Tab') e.preventDefault(); });
+      window.addEventListener('keydown', e => {
+        if (e.code === 'Tab') e.preventDefault();
+      });
+
       requestAnimationFrame(frame);
 
     })();
