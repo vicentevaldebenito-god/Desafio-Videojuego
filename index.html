@@ -2211,7 +2211,7 @@
         if(line)ctx.fillText(line,x,yy);ctx.restore();
       }
       function drawBest() {
-        const entry=LOG_ENTRIES[logsSelected]||LOG_ENTRIES[0], killsHere=meta.t[entry.id]||0, col=ET[entry.id].color;
+        const entry=LOG_ENTRIES[logsSelected]||LOG_ENTRIES[0], isBossEntry=entry.id.startsWith('boss'), killsHere=isBossEntry?(meta.t.boss||0):(meta.t[entry.id]||0), col=isBossEntry?ET.boss.color:(ET[entry.id]?.color||'#8fd8ff');
         dim(0.94);
         txt('LOGS DEL ABISMO',W/2,66,36,'#8fd8ff','center',14);
         txt('ARCHIVO DE CAMPO  /  REGISTROS DE CRIATURAS',W/2,96,12,'#739bb6','center');
