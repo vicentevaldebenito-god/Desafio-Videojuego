@@ -2894,6 +2894,7 @@ for (const remote of MP.remotePlayers.values()) {
       }
 
 
+
       /* ---------------------------------------------------------------------
          16. BUCLE PRINCIPAL
          --------------------------------------------------------------------- */
@@ -3290,7 +3291,8 @@ for (const remote of MP.remotePlayers.values()) {
         const now = performance.now();
 
         for (const [id, remote] of MP.remotePlayers) {
-          if (now - remote.lastSeen > 2500) {
+          // CAMBIO: ahora espera 15 segundos antes de eliminar al jugador
+          if (now - remote.lastSeen > 15000) {
             MP.remotePlayers.delete(id);
             continue;
           }
