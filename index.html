@@ -1488,6 +1488,24 @@
         }
       }
 
+      function finishBossDesperationRound(e) {
+        e.despCycles = (e.despCycles || 0) + 1;
+        if (e.despCycles >= 4) {
+          e.despFinished = true; e.despLock = false; e.hp = 1;
+          e.state = 'walk'; e.st = 1.8; e.despLights = null;
+          e.vx = 0; e.vy = 0; inkT = 0;
+          banner = { t: 3.2, max: 3.2, l1: '¡EL JEFE ESTÁ AGOTADO!', l2: 'AHORA PUEDES ACABAR CON ÉL' };
+          ring(e.x,e.y,260,'#ff4b55',0.8,7); AudioSys.sfx('roar');
+        } else {
+          e.despLock = true; e.despTimer = 0; e.despStage = 0; e.escape = 0;
+          e.despLights = null; e.hitDone = false; e.vx = 0; e.vy = 0; e.st = 1.1;
+          e.state = bfl() === 1 ? 'desp_chase' : 'desp_inhale';
+          if (bfl() === 2) inkT = 5;
+          banner = { t: 2.4, max: 2.4, l1: 'DESESPERACIÓN · ' + e.despCycles + '/4', l2: '¡SOBREVIVE A LA SIGUIENTE RONDA!' };
+          ring(e.x,e.y,170,'#ff3b4a',0.55,5); AudioSys.sfx('roar');
+        }
+      }
+
       function updateBoss(e, dt, target) {
         const toP = Math.atan2(target.y - e.y, target.x - e.x), dP = dist(e.x, e.y, target.x, target.y);
         const enr = e.hp < e.maxHp * 0.5;
@@ -1509,7 +1527,7 @@
         if (e.boss && (bfl() === 1 || bfl() === 2) && !e.despFinished && !e.despLock && e.hp <= e.maxHp * 0.12) {
           e.hp = 1; e.despLock = true; e.despStage = 0; e.despTimer = 0;
           e.state = bfl() === 1 ? 'desp_chase' : 'desp_inhale';
-          e.despLights = null; e.hitDone = false;
+          e.despCycles = 0; e.despLights = null; e.hitDone = false;
           banner = { t: 3, max: 3, l1: 'FASE DE DESESPERACIÓN', l2: 'SOBREVIVE A SU ÚLTIMO ATAQUE' };
           ebullets.length = 0; shake(20); AudioSys.sfx('roar');
         }
@@ -1535,8 +1553,8 @@
                 if (keys.Space || pressed.Space) e.escape = Math.min(1, (e.escape || 0) + dt * 1.15);
                 else e.escape = Math.max(0, (e.escape || 0) - dt * 0.12);
               }
-              if ((e.escape || 0) >= 1) { if (target === P) P.rootT = 0; e.despFinished = true; e.despLock = false; e.hp = 1; e.state = 'walk'; e.st = 1.2; banner = { t: 2.5, max: 2.5, l1: '¡SE HA AGOTADO!', l2: 'AHORA PUEDES ACABAR CON ÉL' }; }
-              else if (e.despTimer >= 4.5) { if (target === P) { P.rootT = 0; hurtEnemyTargetPlayer(target, target.maxHp * 0.8, 0); } e.despTimer = 0; e.escape = 0; e.despStage++; if (e.despStage >= 2) { e.despFinished = true; e.despLock = false; e.hp = 1; e.state = 'walk'; e.st = 1.2; } }
+              if ((e.escape || 0) >= 1) { if (target === P) P.rootT = 0; finishBossDesperationRound(e); }
+              else if (e.despTimer >= 4.5) { if (target === P) { P.rootT = 0; hurtEnemyTargetPlayer(target, target.maxHp * 0.8, 0); } finishBossDesperationRound(e); }
             }
           } else {
             if (e.state === 'desp_inhale') {
@@ -1547,7 +1565,7 @@
             } else if (e.state === 'desp_lights') {
               decel(e, dt, 3000); inkT=Math.max(inkT,0.15);
               const correct=e.despLights.reduce((a,b)=>b.power>a.power?b:a,e.despLights[0]);
-              if (target === P && pressed.KeyR && dist(P.x,P.y,correct.x,correct.y)<58) { e.hp=0; e.despLock=false; e.despFinished=true; killEnemy(e); return; }
+              if (target === P && pressed.KeyR && dist(P.x,P.y,correct.x,correct.y)<58) { finishBossDesperationRound(e); return; }
               e.despTimer += dt;
             }
           }
@@ -2931,6 +2949,12 @@ maxRank = Math.max(maxRank, sr()); ambT -= dt; if (ambT <= 0) { ambT = rand(9, 2
           else { ctx.beginPath(); for (let i = 0; i < 6; i++) { const a = i * TAU / 6; ctx.lineTo(Math.cos(a) * e.r, Math.sin(a) * e.r); } ctx.closePath(); ctx.fill(); ctx.fillStyle = 'rgba(0,20,40,.6)'; ctx.beginPath(); ctx.arc(0, 0, e.r * .5, 0, TAU); ctx.fill(); ctx.globalAlpha = .35 + .2 * Math.sin(e.t * 4); ctx.strokeStyle = col; ctx.beginPath(); ctx.arc(0, 0, 190, 0, TAU); ctx.stroke(); }
           ctx.restore(); addGlow(e.x, e.y, e.r * 2.4, col, 0.4); return;
         }
+        if (e.boss && e.despLock) {
+          const pulse = Math.sin(time * (e.state === 'desp_inhale' ? 9 : 5)) * 0.035;
+          ctx.translate(0, Math.sin(time * 7) * (e.state === 'desp_lights' ? 2 : 5));
+          ctx.rotate(Math.sin(time * 4.5) * (e.state === 'desp_line_dash' ? 0.07 : 0.025));
+          ctx.scale(1 + pulse, 1 - pulse * 0.6);
+        }
         drawBody(e, fl, col);
         if (false) {
           ctx.rotate(e.face); ctx.lineCap = 'round'; ctx.strokeStyle = fl ? '#fff' : '#1b6e5a'; ctx.lineWidth = 3;
@@ -2989,9 +3013,11 @@ maxRank = Math.max(maxRank, sr()); ambT -= dt; if (ambT <= 0) { ambT = rand(9, 2
         }
         if (e.boss && e.state === 'lamp_telegraph') {const len=Math.max(W,H)*1.4;ctx.save();ctx.globalCompositeOperation='lighter';ctx.strokeStyle='rgba(255,35,45,0.2)';ctx.lineWidth=42;ctx.beginPath();ctx.moveTo(e.x,e.y);ctx.lineTo(e.x+Math.cos(e.cA)*len,e.y+Math.sin(e.cA)*len);ctx.stroke();ctx.strokeStyle='rgba(255,45,55,0.9)';ctx.lineWidth=3;ctx.setLineDash([16,10]);ctx.beginPath();ctx.moveTo(e.x,e.y);ctx.lineTo(e.x+Math.cos(e.cA)*len,e.y+Math.sin(e.cA)*len);ctx.stroke();ctx.setLineDash([]);ctx.restore();}
         if (e.boss && e.state === 'desp_line_telegraph') {ctx.save();ctx.globalCompositeOperation='lighter';ctx.fillStyle='rgba(255,25,40,0.16)';ctx.fillRect(WALL,e.despY-24,W-2*WALL,48);ctx.strokeStyle='rgba(255,45,55,0.95)';ctx.lineWidth=4;ctx.setLineDash([18,10]);ctx.beginPath();ctx.moveTo(WALL,e.despY);ctx.lineTo(W-WALL,e.despY);ctx.stroke();ctx.setLineDash([]);ctx.restore();}
-        if (e.boss && e.state === 'desp_chase') {ctx.save();ctx.strokeStyle='rgba(255,45,55,0.78)';ctx.lineWidth=3;ctx.setLineDash([8,8]);ctx.beginPath();ctx.arc(P.x,P.y,64+Math.sin(time*8)*9,0,TAU);ctx.stroke();ctx.setLineDash([]);ctx.restore();}
+        if (e.boss && e.state === 'desp_chase') {ctx.save();ctx.globalCompositeOperation='lighter';ctx.strokeStyle='rgba(255,45,55,0.9)';ctx.lineWidth=4;ctx.setLineDash([8,8]);ctx.beginPath();ctx.arc(P.x,P.y,64+Math.sin(time*8)*9,0,TAU);ctx.stroke();ctx.setLineDash([]);ctx.strokeStyle='rgba(255,35,45,0.42)';ctx.lineWidth=22;ctx.beginPath();ctx.moveTo(e.x,e.y);ctx.lineTo(P.x,P.y);ctx.stroke();ctx.restore();}
+        if (e.boss && e.state === 'desp_line_dash') {ctx.save();ctx.globalCompositeOperation='lighter';ctx.fillStyle='rgba(255,25,40,0.2)';ctx.fillRect(WALL,e.despY-30,W-2*WALL,60);ctx.strokeStyle='rgba(255,45,55,0.95)';ctx.lineWidth=4;ctx.setLineDash([14,8]);ctx.beginPath();ctx.moveTo(WALL,e.despY);ctx.lineTo(W-WALL,e.despY);ctx.stroke();ctx.setLineDash([]);ctx.restore();}
         if (e.boss && e.state === 'desp_algae') {ctx.save();ctx.globalCompositeOperation='lighter';ctx.strokeStyle='rgba(255,35,45,0.85)';ctx.lineWidth=5;ctx.setLineDash([10,7]);ctx.beginPath();ctx.arc(P.x,P.y,78,0,TAU);ctx.stroke();ctx.setLineDash([]);ctx.fillStyle='rgba(255,35,45,0.95)';ctx.font='bold 18px Consolas';ctx.textAlign='center';ctx.fillText('¡SPAMEA ESPACIO!',P.x,P.y-55);ctx.restore();}
-        if (e.boss && e.state === 'desp_inhale') {ctx.save();ctx.globalCompositeOperation='lighter';ctx.strokeStyle='rgba(255,35,45,0.72)';ctx.lineWidth=4;ctx.setLineDash([12,8]);ctx.beginPath();ctx.arc(e.x,e.y,Math.max(85,Math.min(360,110+e.despTimer*55)),0,TAU);ctx.stroke();ctx.setLineDash([]);ctx.strokeStyle='rgba(255,45,55,0.65)';ctx.lineWidth=12;ctx.beginPath();ctx.moveTo(P.x,P.y);ctx.lineTo(e.x,e.y);ctx.stroke();ctx.restore();}
+        if (e.boss && e.state === 'desp_inhale') {ctx.save();ctx.globalCompositeOperation='lighter';ctx.strokeStyle='rgba(255,35,45,0.85)';ctx.lineWidth=5;ctx.setLineDash([12,8]);ctx.beginPath();ctx.arc(e.x,e.y,Math.max(85,Math.min(360,110+e.despTimer*55)),0,TAU);ctx.stroke();ctx.setLineDash([]);ctx.strokeStyle='rgba(255,45,55,0.58)';ctx.lineWidth=18;ctx.beginPath();ctx.moveTo(P.x,P.y);ctx.lineTo(e.x,e.y);ctx.stroke();ctx.fillStyle='rgba(255,35,45,0.95)';ctx.font='bold 16px Consolas';ctx.textAlign='center';ctx.fillText('¡DASHEA PARA ESCAPAR!',P.x,P.y-42);ctx.restore();}
+        if (e.boss && e.state === 'desp_lights') {ctx.save();ctx.globalCompositeOperation='lighter';ctx.strokeStyle='rgba(255,45,55,0.7)';ctx.lineWidth=3;ctx.setLineDash([7,7]);ctx.beginPath();ctx.arc(W/2,H/2,390,0,TAU);ctx.stroke();ctx.setLineDash([]);ctx.fillStyle='rgba(255,45,55,0.95)';ctx.font='bold 15px Consolas';ctx.textAlign='center';ctx.fillText('ENCUENTRA LA LUZ MÁS BRILLANTE · ' +(e.despCycles||0)+'/4',W/2,72);ctx.restore();}
         // telegrafías
         if ((e.type === 'tank' && (e.state === 'cwind')) || (e.boss && e.state === 'cwind')) {
           const a = e.boss ? e.cA : e.face;
@@ -4163,7 +4189,7 @@ maxRank = Math.max(maxRank, sr()); ambT -= dt; if (ambT <= 0) { ambT = rand(9, 2
             const remote=MP.remotePlayers.get(data.id), index=Number(data.lightIndex);
             if (boss && remote && Number.isInteger(index) && index>=0 && index<boss.despLights.length && dist(remote.x,remote.y,boss.despLights[index].x,boss.despLights[index].y)<75) {
               const correct=boss.despLights.reduce((a,b)=>b.power>a.power?b:a,boss.despLights[0]);
-              if (boss.despLights[index]===correct) { boss.hp=0; boss.despLock=false; boss.despFinished=true; killEnemy(boss); }
+              if (boss.despLights[index]===correct) { finishBossDesperationRound(boss); }
               else hurtEnemyTargetPlayer(remote,12,Math.atan2(remote.y-boss.y,remote.x-boss.x));
             }
             return;
@@ -4519,7 +4545,7 @@ maxRank = Math.max(maxRank, sr()); ambT -= dt; if (ambT <= 0) { ambT = rand(9, 2
         't','state','st','cd','side','sideT','pull','pullT','dead','boss','mini',
         'score','wanderT','wA','hitDone','cA','n','af','orbit','orbitT','phase',
         'shield','vuln','vulnT','parryT','dodgeT','dodgeA','reflect','ecd',
-        'vis','cam','amT','amInit','segT','bounty','phaseInvuln','despLock','despFinished','despStage','despTimer','escape','despY','despDir','rollA','rollN','despLights','damageMult'
+        'vis','cam','amT','amInit','segT','bounty','phaseInvuln','despLock','despFinished','despStage','despTimer','despCycles','escape','despY','despDir','rollA','rollN','despLights','damageMult'
       ];
       let mpWorldTimer = 0;
       let mpWorldRevision = 0;
