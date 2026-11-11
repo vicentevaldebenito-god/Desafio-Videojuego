@@ -3273,7 +3273,7 @@ maxRank = Math.max(maxRank, sr()); ambT -= dt; if (ambT <= 0) { ambT = rand(9, 2
               const wave = Math.sin(e.t * 5.2 - i * 0.34) * r * 0.025;
               ctx.save();
               ctx.translate(x + wave, y);
-              ctx.rotate(tangent - fa0);
+              ctx.rotate(tangent);
               // Aleta dorsal pequeña en cada placa alterna: silueta de anguila eléctrica.
               if (i % 2 === 0 && i < sg.length - 2) {
                 ctx.fillStyle = fl ? '#fff' : '#c9b83d';
