@@ -140,13 +140,41 @@
         keys.KeyA = keys.KeyD = keys.KeyW = keys.KeyS = false;
       }
       function drawTouchControls() {
-        if (!MOBILE || !P || !['playing','paused','upgrade','inv'].includes(state)) return;
+        if (!MOBILE) return;
         ctx.save(); ctx.setTransform(scale, 0, 0, scale, 0, 0);
         const circle = (x,y,r,fill,stroke) => { ctx.beginPath(); ctx.arc(x,y,r,0,TAU); ctx.fillStyle=fill; ctx.fill(); ctx.lineWidth=3; ctx.strokeStyle=stroke; ctx.stroke(); };
+        const touchButton = (x,y,w,h,label,color) => {
+          ctx.fillStyle='rgba(4,18,32,.88)'; ctx.fillRect(x,y,w,h);
+          ctx.strokeStyle=color; ctx.lineWidth=2; ctx.strokeRect(x+1,y+1,w-2,h-2);
+          ctx.fillStyle=color; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.font='bold 14px Arial'; ctx.fillText(label,x+w/2,y+h/2);
+        };
+        if (state === 'menu') {
+          if (mpOpen) { ctx.restore(); return; }
+          if (!charMenu && !bestMenu && !optMenu && !tutMenu) {
+            touchButton(150,615,220,54,'JUGAR','#7dff6a');
+            touchButton(390,615,220,54,'PERSONAJES','#8fd8ff');
+            touchButton(630,615,220,54,'BESTIARIO','#ffe94a');
+            touchButton(870,615,260,54,'MULTIJUGADOR','#2ee6ff');
+          } else {
+            touchButton(28,640,170,48,'VOLVER','#8fd8ff');
+            if (charMenu && pendingStart) touchButton(440,635,400,48,'COMENZAR INMERSIÓN','#7dff6a');
+          }
+          ctx.restore(); return;
+        }
+        if (!P || !['playing','paused','upgrade','inv'].includes(state)) { ctx.restore(); return; }
         // Acceso rápido a pantalla completa, siempre visible durante la partida.
         circle(1220,48,27,'rgba(46,230,255,.14)','rgba(46,230,255,.65)');
         ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.font='bold 18px Arial';
         ctx.fillStyle='#b8f4ff'; ctx.fillText(document.fullscreenElement ? '×' : '⛶',1220,48);
+        if (state === 'playing' || state === 'inv' || state === 'upgrade') {
+          circle(1145,48,27,'rgba(255,177,59,.16)','rgba(255,177,59,.8)');
+          ctx.fillStyle='#ffd08a'; ctx.font='bold 13px Arial'; ctx.fillText('Ⅱ',1145,48);
+        }
+        if (state === 'paused') {
+          touchButton(390,420,220,58,'REANUDAR','#7dff6a');
+          touchButton(670,420,220,58,'MENÚ INICIO','#ff6b78');
+          ctx.restore(); return;
+        }
         circle(142,578,82,'rgba(4,20,34,.38)','rgba(110,220,255,.30)');
         circle(142 + touchPad.joyX*55,578 + touchPad.joyY*55,31,'rgba(46,230,255,.32)','rgba(150,235,255,.8)');
         circle(970,590,51,'rgba(255,177,59,.18)','rgba(255,177,59,.85)');
@@ -163,7 +191,33 @@
         if (!MOBILE) return;
         const p = touchGamePoint(e);
         AudioSys.init(); AudioSys.resume();
-        if (p.x > 1178 && p.y < 88) {
+        if (state === 'menu' && !mpOpen) {
+          if (charMenu || bestMenu || optMenu || tutMenu) {
+            if (p.x < 210 && p.y > 620) {
+              if (charMenu) { pressed.Escape = true; }
+              else if (bestMenu) bestMenu = false;
+              else if (optMenu) optMenu = false;
+              else if (tutMenu) { tutMenu = false; tutPage = 0; }
+            } else if (charMenu && pendingStart && p.x >= 430 && p.x <= 850 && p.y >= 625) {
+              mouse.x = W/2; mouse.y = 645; mouse.lp = true; pressed.Enter = true;
+            } else {
+              mouse.x=p.x; mouse.y=p.y; mouse.lp=true;
+            }
+          } else if (p.y >= 605 && p.y <= 680) {
+            if (p.x >= 140 && p.x <= 380) { infinite=false; pendingStart='norm'; charMenu=true; }
+            else if (p.x >= 380 && p.x <= 620) charMenu=true;
+            else if (p.x >= 620 && p.x <= 860) bestMenu=true;
+            else if (p.x >= 860 && p.x <= 1145) mpToggle(true);
+          } else { mouse.x=p.x; mouse.y=p.y; mouse.lp=true; }
+        } else if (state === 'playing' && p.x >= 1105 && p.x <= 1178 && p.y < 88) {
+          if (!MP.connected || MP.isHost) state='paused';
+        } else if (state === 'paused' && p.y >= 400 && p.y <= 500) {
+          if (p.x >= 370 && p.x <= 630) { if (!MP.connected || MP.isHost) state='playing'; }
+          else if (p.x >= 650 && p.x <= 920) {
+            if (MP.connected) mpLeaveRoom("HAS ABANDONADO LA SALA");
+            mpToggle(false); state='menu';
+          }
+        } else if (p.x > 1178 && p.y < 88) {
           if (!document.fullscreenElement) {
             const enterFullscreen = document.documentElement.requestFullscreen || canvas.requestFullscreen;
             if (enterFullscreen) {
