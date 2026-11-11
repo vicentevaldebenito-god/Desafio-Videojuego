@@ -693,7 +693,17 @@
         const mpCount = MP && MP.connected ? clamp(Number(MP.players) || 1, 1, 4) : 1;
         const enemyMultiplier = [1, 2, 2.5, 3][mpCount - 1];
         const list = [];
-        const pool = loop === 0 && floorN === 1 ? ['stalker', 'stalker', 'drone'] : loop === 0 && floorN === 2 ? ['stalker', 'drone', 'dodger', 'dodger', 'tank'] : ['stalker', 'drone', 'dodger', 'tank', 'spitter', 'sniper', 'guardian'].concat(loop >= 1 ? ['bomber', 'phantom'] : []);
+        const poolsByFloor = {
+          1: ['stalker', 'stalker', 'bomber'],
+          2: ['stalker', 'bomber', 'spitter', 'spitter'],
+          3: ['stalker', 'bomber', 'spitter', 'tank', 'tank'],
+          4: ['stalker', 'bomber', 'spitter', 'tank', 'sniper', 'sniper'],
+          5: ['stalker', 'bomber', 'spitter', 'tank', 'sniper', 'guardian', 'guardian'],
+          6: ['stalker', 'bomber', 'spitter', 'tank', 'sniper', 'guardian', 'dodger', 'dodger'],
+          7: ['stalker', 'bomber', 'spitter', 'tank', 'sniper', 'guardian', 'dodger', 'phantom'],
+          8: ['stalker', 'bomber', 'spitter', 'tank', 'sniper', 'guardian', 'dodger', 'phantom']
+        };
+        const pool = (poolsByFloor[floorN] || poolsByFloor[8]).concat(loop >= 1 ? ['bomber', 'phantom'] : []);
         while (b > 0 && list.length < 500) { let t = pool[Math.floor(Math.random() * pool.length)]; if (b < ET[t].cost) t = 'stalker'; list.push(t); b -= ET[t].cost; }
         if (loop >= 1) { const c = loop >= 3 ? 2 : (Math.random() < 0.55 ? 1 : 0); for (let i = 0; i < c; i++) list.push('mini'); }
         // Multiplicador exacto de cantidad: 2, 2.5 o 3 veces la oleada base.
@@ -799,11 +809,13 @@
         const sc = (1 + 0.2 * (floorN - 1) + 0.04 * (roomN - 1)) * Math.pow(1.45, loop) * (1 + 0.15 * cfg.pres);
         const mpCount = MP && MP.connected ? clamp(Number(MP.players) || 1, 1, 4) : 1;
         const enemyHpMultiplier = [1, 2, 3, 4][mpCount - 1];
-        const hp = (type === 'boss' ? BOSS_HP[floorN - 1] * Math.pow(1.45, loop) * (1 + 0.15 * cfg.pres) : base.hp * sc) * enemyHpMultiplier;
+        const floorBuff = floorN === 7 ? 1.5 : floorN >= 8 ? 2.25 : 1;
+        const hp = (type === 'boss' ? BOSS_HP[floorN - 1] * Math.pow(1.45, loop) * (1 + 0.15 * cfg.pres) : base.hp * sc * floorBuff) * enemyHpMultiplier;
         const e = {
           netId: crypto.randomUUID(),
           type, x, y, vx: 0, vy: 0, r: base.r, hp, maxHp: hp, speed: base.speed * (1 + 0.05 * (floorN - 1)) * (type === 'boss' ? 1 : 1),
           face: 0, spawnT: type === 'boss' ? 2.8 : 0.9, spawnMax: type === 'boss' ? 2.8 : 0.9,
+          damageMult: floorBuff,
           flash: 0, slow: 0, burn: 0, blind: 0, marked: 0, stun: 0, corrode: 0, corrodeT: 0, hitCd: 0, t: rand(0, 10),
           state: 'walk', st: rand(0.5, 2), cd: rand(1, 3), side: 1, sideT: 0, pinned: null, impaled: null, pull: false, pullT: 0,
           dead: false, boss: type === 'boss', score: base.score, wanderT: 0, wA: 0, hitDone: false, cA: 0, n: 0
@@ -1075,6 +1087,7 @@
       function updatePlayer(dt) {
         const p = P;
         if (p.dead) { p.vx *= 0.9; p.vy *= 0.9; moveEntity(p, p.vx * dt, p.vy * dt, p.r); return; }
+        if (p.rootT > 0) { p.rootT = Math.max(0, p.rootT - dt); p.vx *= 0.82; p.vy *= 0.82; moveEntity(p, p.vx * dt, p.vy * dt, p.r); return; }
         const rm = reloadMult(), sm = speedMult();
         if (MOBILE) {
           let target = null, targetD = 900;
@@ -1134,6 +1147,7 @@
           }));
           return 0;
         }
+        if (e.boss && ((e.phaseInvuln || 0) > 0 || (e.despLock && !e.despFinished))) return 0;
         if (e.boss && bfl() === 4) { if (e.parryT > 0) { e.reflect = true; return 0; } if (e.dodgeT > 0) return 0; if (!(e.ecd > 0)) { const rr = Math.random(); if (rr < 0.28) { e.parryT = 0.5; e.ecd = 2.2; ring(e.x, e.y, 70, '#ffffff', 0.4, 6); AudioSys.sfx('parry'); return 0; } else if (rr < 0.5) { e.dodgeT = 0.3; e.dodgeA = Math.atan2(P.y - e.y, P.x - e.x) + (Math.random() < 0.5 ? 1 : -1) * Math.PI / 2; e.ecd = 1.6; return 0; } } }
         if (e.boss && bfl() === 6) dmg *= Math.max(0.35, 1 - 0.03 * (enemies.length - 1));
         let m = 1, crit = false;
@@ -1460,10 +1474,60 @@
           return;
         }
         const ph = e.hp < e.maxHp * 0.33 ? 2 : e.hp < e.maxHp * 0.66 ? 1 : 0;
+        e.phaseInvuln = Math.max(0, (e.phaseInvuln || 0) - dt);
         if (ph > (e.ph || 0)) {
-          e.ph = ph; shake(30); hitstop = 0.3; ring(e.x, e.y, 520, '#ff3b4a', 0.8, 8); AudioSys.sfx('roar'); banner = { t: 2.4, max: 2.4, l1: ph === 2 ? '¡FASE FINAL!' : '¡EL ABISMO SE ENFURECE!', l2: bfl() === 1 ? 'La bestia llama a su enjambre' : bfl() === 2 ? 'Las luces se apagan' : 'Los tentáculos reptan' };
+          e.ph = ph; e.phaseInvuln = 10; shake(30); hitstop = 0.3; ring(e.x, e.y, 520, '#ff3b4a', 0.8, 8); AudioSys.sfx('roar'); banner = { t: 2.4, max: 2.4, l1: ph === 2 ? '¡FASE FINAL!' : '¡EL ABISMO SE ENFURECE!', l2: bfl() === 1 ? 'La bestia llama a su enjambre' : bfl() === 2 ? 'Las luces se apagan' : 'Los tentáculos reptan' };
           if (bfl() === 1) { for (let i = 0; i < 4; i++) spawnEnemy('stalker', clamp(e.x + rand(-120, 120), WALL + 30, W - WALL - 30), clamp(e.y + rand(-120, 120), WALL + 30, H - WALL - 30)); } else if (bfl() === 2) inkT = 5;
           else { e.state = 'tent'; e.st = 2.5; e.tt = [0, 1, 2, 3, 4, 5].map(i => ({ x: clamp(target.x + (i ? rand(-170, 170) : 0), WALL + 40, W - WALL - 40), y: clamp(target.y + (i ? rand(-170, 170) : 0), WALL + 40, H - WALL - 40), t: 0.9 + i * 0.28, d: false })); }
+        }
+        // Fases finales de los dos primeros jefes: la vida queda bloqueada en 1 HP.
+        if (e.boss && (bfl() === 1 || bfl() === 2) && !e.despFinished && !e.despLock && e.hp <= e.maxHp * 0.12) {
+          e.hp = 1; e.despLock = true; e.despStage = 0; e.despTimer = 0;
+          e.state = bfl() === 1 ? 'desp_chase' : 'desp_inhale';
+          e.despLights = null; e.hitDone = false;
+          banner = { t: 3, max: 3, l1: 'FASE DE DESESPERACIÓN', l2: 'SOBREVIVE A SU ÚLTIMO ATAQUE' };
+          ebullets.length = 0; shake(20); AudioSys.sfx('roar');
+        }
+        if (e.boss && e.despLock && !e.despFinished) {
+          if (bfl() === 1) {
+            if (e.state === 'desp_chase') {
+              steerDir(e, toP, 720, 2400, dt);
+              if (dP < e.r + target.r + 4 && e.hitCd <= 0) { hurtEnemyTargetPlayer(target, 25, toP); e.hitCd = 0.65; }
+              e.despTimer += dt;
+              if (e.despTimer >= 4.2) { e.despStage = 0; e.state = 'desp_line_telegraph'; e.despTimer = 0; }
+            } else if (e.state === 'desp_line_telegraph') {
+              decel(e, dt, 3000); e.despTimer += dt;
+              e.despY = clamp(target.y, WALL + 45, H - WALL - 45);
+              if (e.despTimer >= 0.8) { e.x = e.despStage % 2 ? W - WALL - 30 : WALL + 30; e.y = e.despY; e.state = 'desp_line_dash'; e.despTimer = 0; e.despDir = e.despStage % 2 ? -1 : 1; }
+            } else if (e.state === 'desp_line_dash') {
+              const oldX = e.x; e.x += e.despDir * 1500 * dt; e.y = e.despY;
+              if (target === P && Math.abs(target.y - e.despY) < target.r + e.r * 0.45 && target.x >= Math.min(oldX,e.x)-target.r && target.x <= Math.max(oldX,e.x)+target.r && e.hitCd <= 0) { hurtEnemyTargetPlayer(target, 32, 0); e.hitCd = 0.7; }
+              if (e.x < WALL - 60 || e.x > W + 60) { e.despStage++; if (e.despStage < 3) { e.state = 'desp_line_telegraph'; e.despTimer = 0; } else { e.state = 'desp_algae'; e.despTimer = 0; e.escape = 0; } }
+            } else if (e.state === 'desp_algae') {
+              e.despTimer += dt;
+              if (target === P && !P.dead) {
+                P.rootT = Math.max(P.rootT || 0, 0.12);
+                if (keys.Space || pressed.Space) e.escape = Math.min(1, (e.escape || 0) + dt * 1.15);
+                else e.escape = Math.max(0, (e.escape || 0) - dt * 0.12);
+              }
+              if ((e.escape || 0) >= 1) { if (target === P) P.rootT = 0; e.despFinished = true; e.despLock = false; e.hp = 1; e.state = 'walk'; e.st = 1.2; banner = { t: 2.5, max: 2.5, l1: '¡SE HA AGOTADO!', l2: 'AHORA PUEDES ACABAR CON ÉL' }; }
+              else if (e.despTimer >= 3.2) { if (target === P) { P.rootT = 0; hurtEnemyTargetPlayer(target, target.maxHp * 0.8, 0); } e.despTimer = 0; e.escape = 0; e.despStage++; if (e.despStage >= 2) { e.despFinished = true; e.despLock = false; e.hp = 1; e.state = 'walk'; e.st = 1.2; } }
+            }
+          } else {
+            if (e.state === 'desp_inhale') {
+              decel(e, dt, 1800); e.despTimer += dt;
+              if (target === P) { const a = Math.atan2(e.y-target.y,e.x-target.x); moveEntity(P, Math.cos(a)*230*dt, Math.sin(a)*230*dt, P.r); }
+              else mpSendTargetHit(target, 0, toP + Math.PI, Math.cos(toP+Math.PI)*230, Math.sin(toP+Math.PI)*230);
+              if (e.despTimer >= 4) { const n=34, off=rand(0,TAU); for(let i=0;i<n;i++) enemyShoot(e,off+i*TAU/n,260,12,false); e.state='desp_lights'; e.despTimer=0; e.despLights=Array.from({length:5},(_,i)=>({x:W/2+Math.cos(i*TAU/5)*330,y:H/2+Math.sin(i*TAU/5)*230,power:0.35+Math.random()*0.35})); e.despLights[ randi(0,4) ].power=1.35; inkT=10; banner={t:3,max:3,l1:'ENCUENTRA LA LUZ VERDADERA',l2:'ACÉRCATE A LA MÁS BRILLANTE Y PULSA R'}; }
+            } else if (e.state === 'desp_lights') {
+              decel(e, dt, 3000); inkT=Math.max(inkT,0.15);
+              const correct=e.despLights.reduce((a,b)=>b.power>a.power?b:a,e.despLights[0]);
+              if (target === P && pressed.KeyR && dist(P.x,P.y,correct.x,correct.y)<58) { e.hp=0; e.despLock=false; e.despFinished=true; killEnemy(e); return; }
+              e.despTimer += dt;
+            }
+          }
+          e.x = clamp(e.x, WALL + 16, W - WALL - 16); e.y = clamp(e.y, WALL + 16, H - WALL - 16);
+          return;
         }
         {
           let tf = toP; if ((e.state === 'xt' || e.state === 'xd') && e.tl) { const L = e.tl[Math.min(e.n, 1)]; tf = Math.atan2(L[3] - L[1], L[2] - L[0]); } else if ((e.state === 'zt' || e.state === 'zd') && e.zp) { const L = e.zp[Math.min(e.zi || 1, e.zp.length - 1)]; tf = Math.atan2(L[1] - e.y, L[0] - e.x); } else if (e.state === 'rw' || e.state === 'rc' || e.state === 'rr' || e.state === 'amb') tf = e.cA;
@@ -2081,7 +2145,13 @@
       }
       function dropXP(e, v) { const n = e.boss ? 14 : e.mini ? 8 : 1; for (let i = 0; i < n; i++) orbs.push({ x: e.x + rand(-10, 10), y: e.y + rand(-10, 10), vx: rand(-120, 120), vy: rand(-120, 120), v: v / n, t: 0 }); }
 
-      ['LA FOSA ELÉCTRICA', 'CÁMARA DE LA COLMENA', 'ABISMO HUECO', 'VACÍO DE ECOS', 'EL FONDO DEL MUNDO'].forEach((n, i) => THEMES.push(Object.assign({}, THEMES[i % 3], { name: n })));
+      [
+        { name: 'FOSA DE LAS MARIANAS', accent: '#4d9bc4', accent2: '#83c7df', floor: '#061a2b', wall: '#102f48' },
+        { name: 'ABISMO CHALLENGER', accent: '#254d70', accent2: '#547c99', floor: '#020711', wall: '#091827' },
+        { name: 'PENUMBRA ABISAL', accent: '#1d3a55', accent2: '#42627c', floor: '#01050d', wall: '#071321' },
+        { name: 'ZONA DE OSCURIDAD', accent: '#182e45', accent2: '#344f69', floor: '#01040a', wall: '#050e19' },
+        { name: 'FONDO SIN LUZ', accent: '#12263a', accent2: '#2b435a', floor: '#000207', wall: '#030a12' }
+      ].forEach(t => THEMES.push(t));
       function bfl() { return floorN === 8 ? amalForm : floorN <= 7 ? floorN : 1; }
       UPS.push({ id: 'pbig', par: 1, name: 'REFLEJO AMPLIO', max: 3, col: '#ffe94a', icon: 'shield', desc: 'El radio del parry aumenta un 40% por nivel.' },
         { id: 'phome', par: 1, name: 'BALAS GUIADAS', max: 1, col: '#ff9a3b', icon: 'wind', desc: 'Las balas desviadas buscan al enemigo más cercano.' },
@@ -3171,11 +3241,19 @@ maxRank = Math.max(maxRank, sr()); ambT -= dt; if (ambT <= 0) { ambT = rand(9, 2
       function drawDarkness() {
         lctx.globalCompositeOperation = 'source-over';
         lctx.clearRect(0, 0, LW, LH);
-        lctx.fillStyle = 'rgba(1,4,10,0.52)'; lctx.fillRect(0, 0, LW, LH);
+        const darkFloor = floorN >= 5;
+        const floorEightLamp = floorN === 8 && (time % 15) < 5;
+        lctx.fillStyle = floorN <= 3 ? 'rgba(1,4,10,0.52)' : floorN === 4 ? 'rgba(2,15,29,0.76)' : 'rgba(0,2,8,0.96)';
+        lctx.fillRect(0, 0, LW, LH);
         lctx.globalCompositeOperation = 'destination-out';
-        hole(P.x, P.y, 400, 1);
+        if (floorN <= 3) hole(P.x, P.y, 400, 1);
+        else if (floorN === 4) hole(P.x, P.y, 200, 1);
+        else {
+          if (floorN !== 8 || floorEightLamp) hole(mouse.x, mouse.y, 285, 1);
+          hole(P.x, P.y, 72, 0.75);
+        }
         for (const remote of MP.remotePlayers.values()) if (!MP.connected || remote.roomKey === mpRoomKey()) hole(remote.x, remote.y, 300, 0.8);
-        for (const f of flares) hole(f.x, f.y, f.r * 1.7, Math.min(1, f.life / 1.5));
+        for (const f of flares) hole(f.x, f.y, f.r * 2.4, Math.min(1, f.life / 1.5));
         for (const c of clouds) hole(c.x, c.y, 130, 0.7);
         for (const pl of pools) hole(pl.x, pl.y, pl.r * 1.6, 0.6);
         for (const l of lights) { const b = Math.pow(Math.max(0, Math.sin(time * l.rate + l.ph)), 2); if (b > 0.05) hole(l.x, l.y, 220, b * 0.55); }
@@ -3184,6 +3262,10 @@ maxRank = Math.max(maxRank, sr()); ambT -= dt; if (ambT <= 0) { ambT = rand(9, 2
         if (secret && !secret.found && P.revealT > 0) hole(secret.x, secret.y, 90, 0.8);
         lctx.globalCompositeOperation = 'source-over';
         ctx.drawImage(lightCv, 0, 0, W, H);
+        if (floorN === 4) { ctx.save(); ctx.fillStyle='rgba(10,55,88,0.12)'; ctx.fillRect(0,0,W,H); ctx.restore(); }
+        if (floorN === 8 && !floorEightLamp) {
+          for (const e of enemies) if (!e.dead && e.spawnT <= 0 && Math.sin(time * 3 + e.t) > 0.72) addGlow(e.x,e.y,e.r*2.5,'#8deaff',0.85);
+        }
       }
 
       // Barra de 30 segundos para rescatar a un compañero caído.
@@ -3268,6 +3350,10 @@ maxRank = Math.max(maxRank, sr()); ambT -= dt; if (ambT <= 0) { ambT = rand(9, 2
         drawParts(false);
         drawLightsAndAmbient();
         drawDarkness();
+        if (floorN === 8 && time % 15 >= 5) {
+          const bossPuzzle = enemies.find(e => e.boss && e.state === 'desp_lights' && Array.isArray(e.despLights));
+          if (bossPuzzle) for (let i=0;i<bossPuzzle.despLights.length;i++) { const q=bossPuzzle.despLights[i]; ctx.save(); ctx.globalAlpha=0.65+0.35*Math.sin(time*5+i); ctx.fillStyle='#b8f4ff'; ctx.beginPath(); ctx.arc(q.x,q.y,10+q.power*5,0,TAU); ctx.fill(); ctx.strokeStyle='#ffffff'; ctx.lineWidth=2; ctx.stroke(); ctx.restore(); }
+        }
         // revelado por sonar
         if (P.revealT > 0) {
           ctx.save(); ctx.strokeStyle = '#2ee6ff'; ctx.lineWidth = 2; ctx.globalAlpha = Math.min(1, P.revealT);
