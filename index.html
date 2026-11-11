@@ -2885,28 +2885,41 @@
       let lastT = 0;
       function frame(t) {
 
-        // ==========================================
-        // ABYSSAL REDO - MULTIPLAYER MENU
-        // ==========================================
 
-        const MP_SERVER = "https://abyssal-redo-server.vicentevaldebenito.workers.dev";
+        requestAnimationFrame(frame);
+        let dt = (t - lastT) / 1000; lastT = t;
+        if (!(dt > 0)) dt = 1 / 60;
+        dt = Math.min(dt, 0.05);
+        let gdt = dt;
+        if (hitstop > 0) { hitstop -= dt; gdt = dt * 0.08; }
+        try { update(gdt); } catch (err) { if (!window.__uerr) { window.__uerr = 1; console.error(err); } }
+        try { render(); } catch (err) { if (!window.__rerr) { window.__rerr = 1; console.error(err); } resize(); }
+        for (const k in pressed) pressed[k] = false;
+        mouse.lp = false; mouse.rp = false; wheelDir = 0;
+      }
 
-        const MP = {
-          socket: null,
-          room: null,
-          id: crypto.randomUUID(),
-          players: 0,
-          connected: false
-        };
+      // ==========================================
+      // ABYSSAL REDO - MULTIPLAYER MENU
+      // ==========================================
 
-        let mpOpen = false;
+      const MP_SERVER = "https://abyssal-redo-server.vicentevaldebenito.workers.dev";
 
-        // Crear panel oculto
-        const mpUI = document.createElement("div");
+      const MP = {
+        socket: null,
+        room: null,
+        id: crypto.randomUUID(),
+        players: 0,
+        connected: false
+      };
 
-        mpUI.id = "abyssal-multiplayer";
+      let mpOpen = false;
 
-        mpUI.innerHTML = `
+      // Crear panel oculto
+      const mpUI = document.createElement("div");
+
+      mpUI.id = "abyssal-multiplayer";
+
+      mpUI.innerHTML = `
 <div class="mp-panel">
     <div class="mp-title">ABYSSAL RECOIL</div>
     <div class="mp-subtitle">// CONEXIÓN COOPERATIVA</div>
@@ -2939,9 +2952,9 @@
 </div>
 `;
 
-        const mpStyle = document.createElement("style");
+      const mpStyle = document.createElement("style");
 
-        mpStyle.textContent = `
+      mpStyle.textContent = `
 #abyssal-multiplayer {
     display:none;
     position:fixed;
@@ -3045,146 +3058,134 @@
 }
 `;
 
-        document.head.appendChild(mpStyle);
-        document.body.appendChild(mpUI);
+      document.head.appendChild(mpStyle);
+      document.body.appendChild(mpUI);
 
-        const mpStatus = document.getElementById("mp-status");
+      const mpStatus = document.getElementById("mp-status");
 
-        function mpMessage(message) {
-          mpStatus.textContent = message;
+      function mpMessage(message) {
+        mpStatus.textContent = message;
+      }
+
+      function mpToggle(show) {
+        mpOpen = show;
+        mpUI.style.display = show ? "flex" : "none";
+      }
+
+      function mpUpdateCount() {
+        document.getElementById("mp-count").textContent =
+          "JUGADORES: " + MP.players + "/4";
+      }
+
+      function mpConnect(code) {
+        if (MP.socket) {
+          MP.socket.close();
         }
 
-        function mpToggle(show) {
-          mpOpen = show;
-          mpUI.style.display = show ? "flex" : "none";
-        }
+        MP.connected = false;
+        MP.players = 0;
+        MP.room = code;
 
-        function mpUpdateCount() {
-          document.getElementById("mp-count").textContent =
-            "JUGADORES: " + MP.players + "/4";
-        }
+        document.getElementById("mp-room").textContent =
+          "SALA: " + code;
 
-        function mpConnect(code) {
-          if (MP.socket) {
-            MP.socket.close();
-          }
+        mpUpdateCount();
+        mpMessage("CONECTANDO...");
 
-          MP.connected = false;
-          MP.players = 0;
-          MP.room = code;
+        const wsURL =
+          MP_SERVER.replace("https://", "wss://") +
+          "/join/" + encodeURIComponent(code);
 
-          document.getElementById("mp-room").textContent =
-            "SALA: " + code;
+        const socket = new WebSocket(wsURL);
+        MP.socket = socket;
 
-          mpUpdateCount();
-          mpMessage("CONECTANDO...");
-
-          const wsURL =
-            MP_SERVER.replace("https://", "wss://") +
-            "/join/" + encodeURIComponent(code);
-
-          const socket = new WebSocket(wsURL);
-          MP.socket = socket;
-
-          socket.onopen = () => {
-            MP.connected = true;
-            mpMessage("CONECTADO");
-          };
-
-          socket.onmessage = event => {
-            let data;
-
-            try {
-              data = JSON.parse(event.data);
-            } catch {
-              return;
-            }
-
-            if (data.type === "welcome") {
-              MP.players = data.players;
-              mpUpdateCount();
-              mpMessage("CONECTADO A LA SALA");
-            }
-
-            if (data.type === "player-joined") {
-              MP.players = Math.min(4, MP.players + 1);
-              mpUpdateCount();
-            }
-
-            if (data.type === "player-left") {
-              MP.players = Math.max(0, MP.players - 1);
-              mpUpdateCount();
-            }
-          };
-
-          socket.onerror = () => {
-            mpMessage("ERROR DE CONEXIÓN");
-          };
-
-          socket.onclose = () => {
-            if (MP.socket !== socket) return;
-
-            MP.connected = false;
-            MP.players = 0;
-            mpUpdateCount();
-            mpMessage("DESCONECTADO");
-          };
-        }
-
-        // Crear sala
-        document.getElementById("mp-create").onclick = async () => {
-          try {
-            mpMessage("CREANDO SALA...");
-
-            const response = await fetch(MP_SERVER + "/create");
-
-            if (!response.ok) {
-              throw new Error("Error HTTP " + response.status);
-            }
-
-            const data = await response.json();
-
-            document.getElementById("mp-code").value = data.code;
-
-            mpConnect(data.code);
-
-          } catch (error) {
-            console.error("[ABYSSAL MP]", error);
-            mpMessage("ERROR AL CREAR SALA");
-          }
+        socket.onopen = () => {
+          MP.connected = true;
+          mpMessage("CONECTADO");
         };
 
-        // Unirse a sala
-        document.getElementById("mp-join").onclick = () => {
-          const code = document.getElementById("mp-code")
-            .value.trim().toUpperCase();
+        socket.onmessage = event => {
+          let data;
 
-          if (!/^[A-F0-9]{6}$/.test(code)) {
-            mpMessage("CÓDIGO INVÁLIDO");
+          try {
+            data = JSON.parse(event.data);
+          } catch {
             return;
           }
 
-          mpConnect(code);
+          if (data.type === "welcome") {
+            MP.players = data.players;
+            mpUpdateCount();
+            mpMessage("CONECTADO A LA SALA");
+          }
+
+          if (data.type === "player-joined") {
+            MP.players = Math.min(4, MP.players + 1);
+            mpUpdateCount();
+          }
+
+          if (data.type === "player-left") {
+            MP.players = Math.max(0, MP.players - 1);
+            mpUpdateCount();
+          }
         };
 
-        // Volver al juego
-        document.getElementById("mp-close").onclick = () => {
-          mpToggle(false);
+        socket.onerror = () => {
+          mpMessage("ERROR DE CONEXIÓN");
         };
 
-        console.log("ABYSSAL REDO MULTIPLAYER MENU READY");
+        socket.onclose = () => {
+          if (MP.socket !== socket) return;
 
-        requestAnimationFrame(frame);
-        let dt = (t - lastT) / 1000; lastT = t;
-        if (!(dt > 0)) dt = 1 / 60;
-        dt = Math.min(dt, 0.05);
-        let gdt = dt;
-        if (hitstop > 0) { hitstop -= dt; gdt = dt * 0.08; }
-        try { update(gdt); } catch (err) { if (!window.__uerr) { window.__uerr = 1; console.error(err); } }
-        try { render(); } catch (err) { if (!window.__rerr) { window.__rerr = 1; console.error(err); } resize(); }
-        for (const k in pressed) pressed[k] = false;
-        mouse.lp = false; mouse.rp = false; wheelDir = 0;
+          MP.connected = false;
+          MP.players = 0;
+          mpUpdateCount();
+          mpMessage("DESCONECTADO");
+        };
       }
+
+      // Crear sala
+      document.getElementById("mp-create").onclick = async () => {
+        try {
+          mpMessage("CREANDO SALA...");
+
+          const response = await fetch(MP_SERVER + "/create");
+
+          if (!response.ok) {
+            throw new Error("Error HTTP " + response.status);
+          }
+
+          const data = await response.json();
+
+          document.getElementById("mp-code").value = data.code;
+
+          mpConnect(data.code);
+
+        } catch (error) {
+          console.error("[ABYSSAL MP]", error);
+          mpMessage("ERROR AL CREAR SALA");
+        }
+      };
+
+      // Unirse a sala
+      document.getElementById("mp-join").onclick = () => {
+        const code = document.getElementById("mp-code")
+          .value.trim().toUpperCase();
+
+        if (!/^[A-F0-9]{6}$/.test(code)) {
+          mpMessage("CÓDIGO INVÁLIDO");
+          return;
+        }
+
+        mpConnect(code);
+      };
+
+      // Volver al juego
+      document.getElementById("mp-close").onclick = () => {
+        mpToggle(false);
+      };
+
+      console.log("ABYSSAL REDO MULTIPLAYER MENU READY");
       window.addEventListener('keydown', e => { if (e.code === 'Tab') e.preventDefault(); });
       requestAnimationFrame(frame);
 
