@@ -1558,6 +1558,17 @@
         pings = pings.filter(p => p.r < W);
       }
       function updatePickups(dt) {
+        if (MP && MP.connected && !MP.isHost) {
+          for (const p of pickups) {
+            const d = dist(p.x, p.y, P.x, P.y);
+            if (!P.dead && d < P.r + 12 && p.mpId && !MP.pendingPickupIds.has(p.mpId)) {
+              MP.pendingPickupIds.add(p.mpId);
+              try { MP.socket.send(JSON.stringify({ type: 'pickup-request', playerId: MP.id, pickupId: p.mpId, roomKey: mpRoomKey() })); }
+              catch { MP.pendingPickupIds.delete(p.mpId); }
+            }
+          }
+          return;
+        }
         for (const p of pickups) {
           p.t += dt; p.vx *= 1 / (1 + 3 * dt); p.vy *= 1 / (1 + 3 * dt);
           const d = dist(p.x, p.y, P.x, P.y);
@@ -2147,7 +2158,20 @@
         for (const f of feats) {
           f.t += dt; const d = dist(P.x, P.y, f.x, f.y);
           if (f.k === 'vent') { if (d < 70) { P.dashCd = Math.max(0, P.dashCd - dt * 2.5); P.pressure = Math.max(0, P.pressure - dt * 25); } if (Math.random() < dt * 8) bubbles(f.x + rand(-20, 20), f.y, 1, 6); }
-          else if (f.k === 'plant') { if (!f.used && d < 44) { f.used = true; P.hp = Math.min(P.maxHp, P.hp + P.maxHp * 0.15); floatText('+VIDA', P.x, P.y - 30, '#7dff6a', 14); AudioSys.sfx('coin'); } }
+          else if (f.k === 'plant') {
+            if (!f.used && d < 44) {
+              if (MP && MP.connected && !MP.isHost) {
+                if (f.mpId && !MP.pendingFeatureIds.has(f.mpId)) {
+                  MP.pendingFeatureIds.add(f.mpId);
+                  try { MP.socket.send(JSON.stringify({ type: 'plant-heal-request', playerId: MP.id, featureId: f.mpId, roomKey: mpRoomKey() })); }
+                  catch { MP.pendingFeatureIds.delete(f.mpId); }
+                }
+              } else {
+                f.used = true; P.hp = Math.min(P.maxHp, P.hp + P.maxHp * 0.15);
+                floatText('+VIDA', P.x, P.y - 30, '#7dff6a', 14); AudioSys.sfx('coin');
+              }
+            }
+          }
           else { for (const e of enemies) if (!e.dead && e.spawnT <= 0 && !e.boss) { const dd = dist(e.x, e.y, f.x, f.y); if (dd < 260 && dd > 1) { moveEntity(e, (f.x - e.x) / dd * 70 * dt, (f.y - e.y) / dd * 70 * dt, e.r); if (dd < 50) hurtEnemy(e, 14 * dt, { ignoreArmor: true, noText: true }); } } if (d < 200 && d > 1) moveEntity(P, (f.x - P.x) / d * 40 * dt, (f.y - P.y) / d * 40 * dt, P.r); }
         }
         abyssT += dt; if (!hunter && abyssT > 900) { abyssT = 840; hunter = { x: Math.random() < 0.5 ? WALL : W - WALL, y: rand(WALL, H - WALL), cd: 0, t: 0, warn: 2.5 }; banner = { t: 2.6, max: 2.6, l1: 'ALGO TE ESTÁ CAZANDO', l2: 'El Acechador huele tu demora' }; AudioSys.sfx('roar'); }
@@ -3764,7 +3788,9 @@ for (const remote of MP.remotePlayers.values()) {
             .map(incoming => {
               const old = previous.get(incoming.netId);
               if (!old) return { ...incoming, _mpTx: incoming.x, _mpTy: incoming.y, pinned: null, impaled: null };
+              const currentX = old.x, currentY = old.y;
               Object.assign(old, incoming, { _mpTx: incoming.x, _mpTy: incoming.y });
+              old.x = currentX; old.y = currentY;
               old.pinned = null; old.impaled = null;
               return old;
             });
@@ -3821,8 +3847,11 @@ for (const remote of MP.remotePlayers.values()) {
         if (!MP.connected || !MP.isHost || !MP.socket ||
             MP.socket.readyState !== WebSocket.OPEN) return;
         mpWorldTimer += dt;
-        if (mpWorldTimer < 0.1) return;
+        if (mpWorldTimer < 0.05) return;
         mpWorldTimer = 0;
+
+        for (const p of pickups) if (!p.mpId) p.mpId = crypto.randomUUID();
+        for (const f of feats) if (!f.mpId) f.mpId = crypto.randomUUID();
 
         const snapshot = enemies.map(e => {
           const out = { netId: e.netId || (e.netId = crypto.randomUUID()) };
@@ -3832,7 +3861,8 @@ for (const remote of MP.remotePlayers.values()) {
         const room = { key: mpRoomKey(), floorN, roomN, cellKey: cell ? cell.x + ',' + cell.y : null, dun: mpClone(dun), rs, introT, doorOpen, waveQueue: mpClone(waveQueue), obstacles: mpClone(obstacles), lights: mpClone(lights), feats: mpClone(feats), secret: mpClone(secret), chest: mpClone(chest), exitPortal: mpClone(exitPortal), sidePortal: mpClone(sidePortal) };
         try {
           const upgradeCards = state === 'upgrade' ? cards.map(c => ({ id: c.id, name: c.name, desc: c.desc, col: c.col, icon: c.icon, art: c.art, rar: c.rar || 0, max: c.max || 99, statKey: c.statKey || null, statValue: Number.isFinite(c.statValue) ? c.statValue : null })) : null;
-          MP.socket.send(JSON.stringify({ type: 'world-state', revision: ++mpWorldRevision, gameState: state, upgradeCards, room, enemies: snapshot, ebullets: mpClone(ebullets), pickups: mpClone(pickups), orbs: mpClone(orbs), xp, level, xpNeed, organs, pend, cpend, kills }));
+          const revision = ++mpWorldRevision;
+          MP.socket.send(JSON.stringify({ type: 'world-state', revision, gameState: state, upgradeCards, room: revision % 2 === 0 ? room : undefined, enemies: snapshot, ebullets: mpClone(ebullets), pickups: mpClone(pickups), orbs: mpClone(orbs), xp, level, xpNeed, organs, pend, cpend, kills }));
         } catch (error) {
           console.warn('[MP] Error sincronizando enemigos:', error);
         }
