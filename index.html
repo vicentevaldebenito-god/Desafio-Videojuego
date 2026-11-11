@@ -3972,6 +3972,11 @@ for (const remote of MP.remotePlayers.values()) {
         if (Number.isFinite(data.xp)) xp = data.xp;
         const previousSyncedLevel = level;
         if (Number.isFinite(data.level)) level = data.level;
+        if (!MP.isHost && P && previousSyncedLevel < 5 && level >= 5 && !P.path && !MP.localClassDone) {
+          MP.localClassOpen = true;
+          state = 'class';
+          AudioSys.sfx('upgrade');
+        }
         if (!MP.isHost && P && P.path) {
           for (const milestone of [10, 20]) {
             if (previousSyncedLevel < milestone && level >= milestone && !MP.localClassMilestones.has(milestone)) {
