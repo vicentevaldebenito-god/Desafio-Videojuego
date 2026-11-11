@@ -2127,7 +2127,7 @@
         if (MP.connected) mpUpdateRevives(dt);
         if ((pressed.Escape || pressed.KeyP) && (!MP.connected || MP.isHost)) { state = 'paused'; return; }
         updatePlayer(dt); updateXW(dt); updateParry(dt); inkT = Math.max(0, inkT - dt); if (mouse.l && enemies.length) { shootAcc += dt; if (shootAcc > 0.6) { shootAcc = 0; addStyle(1.5, 'DISPARO'); } } rankPop = Math.max(0, rankPop - dt * 2.5);
-        P.fcd = Math.max(0, (P.fcd || 0) - dt); if (pressed.KeyF && P.char) specialF(); P.aggro = Math.max(0, (P.aggro || 0) - dt);
+        P.fcd = Math.max(0, (P.fcd || 0) - dt); if (pressed.KeyF && P.char && !mpNearDownedTeammate()) specialF(); P.aggro = Math.max(0, (P.aggro || 0) - dt);
         if (P.aggro > 0) for (const e of enemies) if (!e.dead && e.spawnT <= 0 && !e.boss) { const dd = dist(e.x, e.y, P.x, P.y); if (dd < 450 && dd > 30) moveEntity(e, (P.x - e.x) / dd * 90 * dt, (P.y - e.y) / dd * 90 * dt, e.r); }
         const botTargets = new Set();
         for (const b of bots) {
@@ -2812,11 +2812,12 @@ for (const remote of MP.remotePlayers.values()) {
             panel(W / 2 - 190, 104, 380, 74);
             txt('ESTÁS CAÍDO · ESPERA A UN COMPAÑERO', W / 2, 127, 16, '#ff6b6b', 'center', 8);
             bar(W / 2 - 160, 143, 320, 9, MP.reviveProgress / 10, '#7dff6a');
-            txt('TIEMPO PARA REVIVIR: ' + Math.ceil(left) + 's', W / 2, 166, 12, '#fff', 'center');
+            txt(Math.round(MP.reviveProgress / 10 * 100) + '% · TU COMPAÑERO TE ESTÁ REVIVIENDO', W / 2, 166, 11, '#fff', 'center');
           } else if (MP.reviveProgressTarget) {
-            panel(W / 2 - 170, 104, 340, 50);
+            panel(W / 2 - 180, 104, 360, 66);
             txt('MANTÉN F PARA REVIVIR AL COMPAÑERO', W / 2, 124, 14, '#7dff6a', 'center', 7);
-            txt('TÚ DEBES ESTAR CERCA DEL JUGADOR CAÍDO', W / 2, 142, 10, '#d9eaff', 'center');
+            bar(W / 2 - 145, 137, 290, 8, MP.reviveHelpingProgress || 0, '#7dff6a');
+            txt(Math.round((MP.reviveHelpingProgress || 0) * 100) + '% · NO SUELTES F', W / 2, 160, 10, '#d9eaff', 'center');
           }
           let yy = 190;
           for (const remote of MP.remotePlayers.values()) {
@@ -2950,7 +2951,7 @@ for (const remote of MP.remotePlayers.values()) {
       }
       function updateParry(dt) {
         parryCd = Math.max(0, parryCd - dt); if (P.stagger > 0) P.stagger -= dt;
-        if (!pressed.KeyF || (P.char || 0) !== 0 || P.dead || parryCd > 0) return;
+        if (!pressed.KeyF || (P.char || 0) !== 0 || P.dead || parryCd > 0 || mpNearDownedTeammate()) return;
         let got = 0, near = false;
         for (const b of ebullets) { if (b.fr) continue; const d = dist(b.x, b.y, P.x, P.y); if (d < 78 * (1 + 0.4 * has('pbig')) * (P.char === 0 && P.path === 'A' ? 1 + 0.25 * P.tier : 1)) { b.fr = true; if (has('phome')) b.home = true; b.vx *= -1.5; b.vy *= -1.5; b.col = '#e8ff4a'; b.life = 3; b.dmg = Math.max(b.dmg * 2, 24); got++; spark(b.x, b.y, 8, '#ffffff', 260); } else if (d < 190) near = true; }
         if (got) { if (P.path === 'B') { const nB = 6 + 2 * P.tier; for (let i = 0; i < nB; i++) enemyShoot({ x: P.x, y: P.y, r: 0 }, i * TAU / nB, 420, 30, true); } if (has('pheal')) P.hp = Math.min(P.maxHp, P.hp + 4 * has('pheal') * got); parryCd = 0.15; addStyle(14 + got * 6, 'PARRY'); hitstop = Math.max(hitstop, 0.08); shake(8); ring(P.x, P.y, 90, '#ffffff', 0.3, 4); AudioSys.sfx('parry'); floatText('¡PARRY! x' + got, P.x, P.y - 40, '#ffe94a', 20); P.iframes = Math.max(P.iframes, 0.25); }
@@ -3154,6 +3155,9 @@ for (const remote of MP.remotePlayers.values()) {
         reviveHolds: new Map(),
         reviveProgress: 0,
         reviveProgressTarget: null,
+        reviveHelpingProgress: 0,
+        reviveHelpingTarget: null,
+        reviveProgressSendTimer: 0,
         reviveSendTimer: 0,
         reviveLastSentTarget: null
       };
@@ -3487,7 +3491,13 @@ for (const remote of MP.remotePlayers.values()) {
           }
           if (data.type === 'revive-done' && data.targetId !== MP.id) {
             const revived = MP.remotePlayers.get(data.targetId);
-            if (revived) { revived.dead = false; revived.hp = Number(data.hp) || revived.maxHp * 0.35; }
+            if (revived) { revived.dead = false; revived.hp = Number(data.hp) || revived.maxHp * 0.5; revived.reviveProgress = 0; }
+            return;
+          }
+          if (data.type === 'revive-progress' && data.helperId === MP.id) {
+            if (data.roomKey && data.roomKey !== mpRoomKey()) return;
+            MP.reviveHelpingProgress = clamp(Number(data.progress) || 0, 0, 1);
+            MP.reviveHelpingTarget = data.targetId || null;
             return;
           }
           if (data.type === 'player-fx' && data.action === 'damage' && data.targetId === MP.id) {
@@ -3594,6 +3604,16 @@ for (const remote of MP.remotePlayers.values()) {
 
       function mpRoomKey() { return `${floorN}:${cell ? cell.x + ',' + cell.y : 'none'}`; }
       function mpClone(value) { try { return JSON.parse(JSON.stringify(value)); } catch { return null; } }
+      function mpNearDownedTeammate() {
+        if (!MP || !MP.connected || !P || P.dead) return false;
+        for (const remote of MP.remotePlayers.values()) {
+          if (!remote.dead || remote.roomKey !== mpRoomKey() ||
+              performance.now() - remote.lastSeen > 500) continue;
+          if (dist(P.x, P.y, remote.x, remote.y) <= 115) return true;
+        }
+        return false;
+      }
+
       function mpSendReviveHold(targetId, holding) {
         if (!MP.socket || MP.socket.readyState !== WebSocket.OPEN) return;
         try {
@@ -3629,7 +3649,9 @@ for (const remote of MP.remotePlayers.values()) {
           MP.reviveProgressTarget = targetId;
         }
 
-        // El cliente del jugador caído valida distancia y tiempo del rescatista.
+        // El cliente caído calcula el progreso y lo comparte con quien lo revive.
+        // Así ambos ven la misma barra en tiempo real.
+        if (P.dead) {
         if (P.dead) {
           let helper = null;
           for (const [id, hold] of MP.reviveHolds) {
@@ -3642,20 +3664,32 @@ for (const remote of MP.remotePlayers.values()) {
             break;
           }
           if (helper && Date.now() - (P.deadAt || Date.now()) < 30000) {
-            MP.reviveProgress += dt;
+            MP.reviveProgress = Math.min(10, MP.reviveProgress + dt);
             MP.reviveProgressTarget = helper.id;
           } else {
             MP.reviveProgress = 0;
             MP.reviveProgressTarget = null;
           }
+          MP.reviveProgressSendTimer = (MP.reviveProgressSendTimer || 0) - dt;
+          if (helper && MP.reviveProgressSendTimer <= 0) {
+            MP.reviveProgressSendTimer = 0.1;
+            try {
+              MP.socket.send(JSON.stringify({
+                type: 'revive-progress', helperId: helper.id,
+                targetId: MP.id, progress: MP.reviveProgress / 10,
+                roomKey: mpRoomKey()
+              }));
+            } catch {}
+          }
           if (MP.reviveProgress >= 10) {
             P.dead = false;
             P.deadT = 0;
             P.deadAt = 0;
-            P.hp = Math.max(1, Math.round(P.maxHp * 0.35));
+            P.hp = Math.max(1, Math.round(P.maxHp * 0.5));
             P.iframes = 2;
             MP.reviveProgress = 0;
             MP.reviveHolds.clear();
+            MP.reviveProgressSendTimer = 0;
             try {
               MP.socket.send(JSON.stringify({
                 type: 'revive-done', targetId: MP.id, hp: P.hp,
@@ -3713,7 +3747,18 @@ for (const remote of MP.remotePlayers.values()) {
           if (r.sidePortal !== undefined) sidePortal = mpClone(r.sidePortal);
           if (roomChanged && typeof bakeBG === 'function') bakeBG();
         }
-        if (Array.isArray(data.enemies)) enemies = data.enemies.filter(e => e && typeof e.netId === 'string' && Number.isFinite(e.x) && Number.isFinite(e.y) && Number.isFinite(e.hp)).map(e => ({ ...e, pinned: null, impaled: null }));
+        if (Array.isArray(data.enemies)) {
+          const previous = new Map(enemies.map(e => [e.netId, e]));
+          enemies = data.enemies
+            .filter(e => e && typeof e.netId === 'string' && Number.isFinite(e.x) && Number.isFinite(e.y) && Number.isFinite(e.hp))
+            .map(incoming => {
+              const old = previous.get(incoming.netId);
+              if (!old) return { ...incoming, _mpTx: incoming.x, _mpTy: incoming.y, pinned: null, impaled: null };
+              Object.assign(old, incoming, { _mpTx: incoming.x, _mpTy: incoming.y });
+              old.pinned = null; old.impaled = null;
+              return old;
+            });
+        }
         if (Array.isArray(data.ebullets)) ebullets = mpClone(data.ebullets) || [];
         if (Array.isArray(data.pickups)) pickups = mpClone(data.pickups) || [];
         if (Array.isArray(data.orbs)) orbs = mpClone(data.orbs) || [];
@@ -3766,7 +3811,7 @@ for (const remote of MP.remotePlayers.values()) {
         if (!MP.connected || !MP.isHost || !MP.socket ||
             MP.socket.readyState !== WebSocket.OPEN) return;
         mpWorldTimer += dt;
-        if (mpWorldTimer < 0.1) return;
+        if (mpWorldTimer < 0.05) return;
         mpWorldTimer = 0;
 
         const snapshot = enemies.map(e => {
@@ -3826,6 +3871,16 @@ for (const remote of MP.remotePlayers.values()) {
 
         mpSendWorld(dt);
 
+        // Suaviza las posiciones de los enemigos recibidas del anfitrión.
+        if (!MP.isHost) {
+          const enemyK = Math.min(1, dt * 22);
+          for (const enemy of enemies) {
+            if (!Number.isFinite(enemy._mpTx) || !Number.isFinite(enemy._mpTy)) continue;
+            enemy.x += (enemy._mpTx - enemy.x) * enemyK;
+            enemy.y += (enemy._mpTy - enemy.y) * enemyK;
+          }
+        }
+
         if (!MP.remotePlayers) return;
 
         const now = performance.now();
@@ -3836,7 +3891,7 @@ for (const remote of MP.remotePlayers.values()) {
             continue;
           }
 
-          const k = Math.min(1, dt * 18);
+          const k = Math.min(1, dt * 24);
 
           remote.x += (remote.tx - remote.x) * k;
           remote.y += (remote.ty - remote.y) * k;
