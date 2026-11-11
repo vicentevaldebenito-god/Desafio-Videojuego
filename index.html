@@ -2179,12 +2179,6 @@
               if (everyoneKnown && liveRemotes.every(q => q.dead)) endRun(false);
             }
           }
-        } else if (MP.connected && MP.isHost) {
-          const liveRemotes = [...MP.remotePlayers.values()].filter(q =>
-            q.roomKey === mpRoomKey() && Date.now() - q.lastSeen < 1500
-          );
-          if (liveRemotes.length >= Math.max(0, MP.players - 1) &&
-              liveRemotes.length > 0 && liveRemotes.every(q => q.dead)) endRun(false);
         }
         // sonar ambiental
         ambPing -= dt; if (ambPing <= 0) { AudioSys.sfx('ping'); ambPing = rand(9, 16); }
