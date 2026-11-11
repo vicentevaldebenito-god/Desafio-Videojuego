@@ -3652,7 +3652,6 @@ for (const remote of MP.remotePlayers.values()) {
         // El cliente caído calcula el progreso y lo comparte con quien lo revive.
         // Así ambos ven la misma barra en tiempo real.
         if (P.dead) {
-        if (P.dead) {
           let helper = null;
           for (const [id, hold] of MP.reviveHolds) {
             const remote = MP.remotePlayers.get(id);
