@@ -964,14 +964,15 @@
         if (e.dead || e.spawnT > 0 || e.orbit > 0) return 0;
         if (MP && MP.connected && !MP.isHost && !o.fromMP) {
           if (e.netId && MP.socket && MP.socket.readyState === WebSocket.OPEN) MP.socket.send(JSON.stringify({
-            type: 'enemy-hit', netId: e.netId, damage: Math.max(0, Number(dmg) || 0),
+            type: 'enemy-hit', playerId: MP.id, netId: e.netId, damage: Math.max(0, Number(dmg) || 0),
             options: {
               ang: Number.isFinite(o.ang) ? o.ang : undefined,
               ignoreArmor: !!o.ignoreArmor, noText: !!o.noText,
               mpDamageMultiplier: P.st.dmg * (1 + 0.3 * chm('might')) *
                 (1 + 0.05 * sr()) * (1 + 0.04 * chm('streak') * streak) *
                 wlv(P.slots[P.weapon]),
-              mpLifesteal: Math.max(0, Number(P.st.ls) || 0)
+              mpLifesteal: Math.max(0, Number(P.st.ls) || 0),
+              mpLeech: has('leech'), mpVamp: chm('vamp')
             }
           }));
           return 0;
@@ -1672,7 +1673,15 @@
       function goDoor(o) { if (MP && MP.connected && !MP.isHost) return; cell = o.n; cell.visited = true; roomN = Math.max(1, cell.d); startRoom(); const m = 90; if (o.d === 'u') { P.x = W / 2; P.y = H - WALL - m; } else if (o.d === 'd') { P.x = W / 2; P.y = WALL + m; } else if (o.d === 'l') { P.x = W - WALL - m; P.y = H / 2; } else { P.x = WALL + m; P.y = H / 2; } }
       function revealSecrets() { for (const d of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const n = dun.cells[(cell.x + d[0]) + ',' + (cell.y + d[1])]; if (n && n.type === 'secret' && !n.rev) { n.rev = true; floatText('¡UNA GRIETA SE ABRE!', W / 2, H / 2, '#2ee6ff', 18); AudioSys.sfx('rankup'); } } }
       function nextSector() { if (MP && MP.connected && !MP.isHost) return; floorN++; if (floorN > FLOORS) { if (infinite) { floorN = 1; loop++; } else { floorN = FLOORS; endRun(true); return; } } roomN = 1; genDungeon(); startRoom(); }
-      function addXP(n) { if (MP && MP.connected && !MP.isHost) { if (MP.socket && MP.socket.readyState === WebSocket.OPEN) MP.socket.send(JSON.stringify({ type: 'xp-request', amount: Math.max(0, Number(n) || 0) })); return; } xp += n * P.st.xp * (1 + 0.2 * style / 100) * (1 + 0.5 * (floorN - 1) + loop) * (1 + 0.2 * cfg.pres) * 2; while (xp >= xpNeed) { xp -= xpNeed; level++; xpNeed = Math.round(xpNeed * 1.25); pend++; if (level === 5 || level === 10 || level === 20) cpend++; } }
+      function addXP(n) {
+        if (MP && MP.connected && !MP.isHost) {
+          if (MP.socket && MP.socket.readyState === WebSocket.OPEN)
+            MP.socket.send(JSON.stringify({ type: 'xp-request', amount: Math.max(0, Number(n) || 0), xpStat: P.st.xp }));
+          return;
+        }
+        xp += n * P.st.xp * (1 + 0.2 * style / 100) * (1 + 0.5 * (floorN - 1) + loop) * (1 + 0.2 * cfg.pres) * 2;
+        while (xp >= xpNeed) { xp -= xpNeed; level++; xpNeed = Math.round(xpNeed * 1.25); pend++; if (level === 5 || level === 10 || level === 20) cpend++; }
+      }
       const STATS = [
         { id: 's_dmg', k: 'dmg', name: 'DAÑO BRUTAL', label: 'Daño', base: 0.12, art: 'implo', icon: 'burst' },
         { id: 's_rate', k: 'rate', name: 'CADENCIA FRENÉTICA', label: 'Cadencia', base: 0.10, art: 'adren', icon: 'pulse' },
@@ -1944,6 +1953,17 @@
         else if (P.char === 9) P.st.dmg += 0.08;
         bots = [];
       }
+      function mpSyncEnemyStatus(enemy, status, values = {}) {
+        if (!MP || !MP.connected || MP.isHost || !enemy || !enemy.netId ||
+            !MP.socket || MP.socket.readyState !== WebSocket.OPEN) return;
+        try {
+          MP.socket.send(JSON.stringify({
+            type: 'enemy-status', playerId: MP.id, netId: enemy.netId,
+            status, ...values, roomKey: mpRoomKey()
+          }));
+        } catch {}
+      }
+
       function specialF() {
         const c = P.char; if (!c || P.fcd > 0) return;
         if (c === 1) { const t = enemies.filter(e => !e.dead && e.spawnT <= 0 && !e.boss && !e.bounty).sort((a, b) => dist(a.x, a.y, P.x, P.y) - dist(b.x, b.y, P.x, P.y)); if (!t.length) return; for (const q of t.slice(0, 1 + (P.path === 'B' ? P.tier : 0))) { q.bounty = true; floatText('¡PRESA MARCADA!', q.x, q.y - 30, '#ffd23f', 16); ring(q.x, q.y, 60, '#ffd23f', 0.5, 4); } }
@@ -1952,7 +1972,12 @@
         else if (c === 4) { const fr = 0.5 + (P.path === 'A' ? 0.15 * P.tier : 0); P.hp = Math.min(P.maxHp, P.hp + P.maxHp * fr); floatText('+' + Math.round(P.maxHp * fr), P.x, P.y - 40, '#7dff6a', 20); ring(P.x, P.y, 120, '#7dff6a', 0.6, 5); if (P.path === 'B') { P.shield += P.tier; P.iframes = Math.max(P.iframes, P.tier); } }
         else if (c === 5) {
           P.revealT = 6 + (P.path === 'A' ? P.tier * 1.5 : 0);
-          for (const e of enemies) if (!e.dead && e.spawnT <= 0) { e.marked = Math.max(e.marked || 0, 4 + (P.path === 'B' ? P.tier * 1.5 : 0)); ring(e.x, e.y, e.r + 28, '#2ee6ff', 0.45, 3); }
+          for (const e of enemies) if (!e.dead && e.spawnT <= 0) {
+            const duration = 4 + (P.path === 'B' ? P.tier * 1.5 : 0);
+            e.marked = Math.max(e.marked || 0, duration);
+            mpSyncEnemyStatus(e, 'mark', { duration });
+            ring(e.x, e.y, e.r + 28, '#2ee6ff', 0.45, 3);
+          }
           ring(P.x, P.y, 520, '#2ee6ff', 0.65, 5);
         }
         else if (c === 6) {
@@ -1964,7 +1989,10 @@
             used.add(target.netId || target);
             spark(target.x,target.y,18,'#ffe94a',360); ring(target.x,target.y,70,'#ffe94a',0.35,4);
             hurtEnemy(target, 82 + 18 * P.tier, { ignoreArmor:true });
-            if (!target.boss) target.stun = Math.max(target.stun || 0, 0.45);
+            if (!target.boss) {
+              target.stun = Math.max(target.stun || 0, 0.45);
+              mpSyncEnemyStatus(target, 'stun', { duration: 0.45 });
+            }
             from = target;
           }
           ring(P.x,P.y,90,'#ffe94a',0.4,4);
@@ -1975,6 +2003,7 @@
             hurtEnemy(e, 42 + 12 * P.tier, { ignoreArmor:true });
             e.corrode = Math.min(8, (e.corrode || 0) + 3 + (P.path === 'B' ? P.tier : 0));
             e.corrodeT = 3.5; e.burn = Math.max(e.burn || 0, 2.5 + P.tier);
+            mpSyncEnemyStatus(e, 'toxin', { stacks: 3 + (P.path === 'B' ? P.tier : 0), duration: 3.5, burn: 2.5 + P.tier });
             addGlow(e.x,e.y,e.r*2,'#7dff6a',0.9); bubbles(e.x,e.y,7,e.r);
           }
           boomFx(P.x,P.y,radius,'#7dff6a','#b6ff3b'); shake(9);
@@ -1984,6 +2013,7 @@
           for (const e of enemies) if (!e.dead && e.spawnT <= 0 && dist(P.x,P.y,e.x,e.y) < radius + e.r) {
             if (e.boss) { e.vuln = Math.max(e.vuln || 0, 2.5 + P.tier); e.slow = Math.max(e.slow || 0, 3); }
             else { e.stun = Math.max(e.stun || 0, 2 + P.tier * 0.5); e.slow = Math.max(e.slow || 0, 4); }
+            mpSyncEnemyStatus(e, e.boss ? 'vuln' : 'stun', { duration: e.boss ? 2.5 + P.tier : 2 + P.tier * 0.5, slow: e.boss ? 3 : 4 });
             ring(e.x,e.y,e.r+35,'#c46bff',0.5,3);
           }
           ring(P.x,P.y,radius,'#c46bff',0.7,6); addGlow(P.x,P.y,radius,'#c46bff',0.55);
@@ -1996,7 +2026,7 @@
               hurtEnemy(e, 115 + 25 * P.tier, { ignoreArmor:true });
               const a = Math.atan2(e.y-P.y,e.x-P.x), force = e.boss ? 180 : 650;
               e.vx += Math.cos(a)*force; e.vy += Math.sin(a)*force;
-              if (!e.boss) e.stun = Math.max(e.stun || 0,0.35);
+              if (!e.boss) { e.stun = Math.max(e.stun || 0,0.35); mpSyncEnemyStatus(e, 'stun', { duration: 0.35 }); }
             }
           }
           boomFx(P.x,P.y,radius,'#ff8a3b','#ffe94a'); shake(18); ring(P.x,P.y,radius,'#ff8a3b',0.6,7);
@@ -3915,13 +3945,40 @@ maxRank = Math.max(maxRank, sr()); ambT -= dt; if (ambT <= 0) { ambT = rand(9, 2
             mpApplyWorld(data);
             return;
           }
+          if (data.type === 'enemy-status' && MP.isHost) {
+            if (state !== 'playing' || (data.roomKey && data.roomKey !== mpRoomKey())) return;
+            const sender = MP.remotePlayers.get(data.playerId);
+            const enemy = enemies.find(e => e.netId === data.netId && !e.dead);
+            if (!sender || sender.dead || sender.roomKey !== mpRoomKey() ||
+                performance.now() - sender.lastSeen > 1500 || !enemy) return;
+            const duration = clamp(Number(data.duration) || 0, 0, 12);
+            if (data.status === 'mark') enemy.marked = Math.max(enemy.marked || 0, duration);
+            else if (data.status === 'stun') {
+              enemy.stun = Math.max(enemy.stun || 0, duration);
+              enemy.slow = Math.max(enemy.slow || 0, clamp(Number(data.slow) || 0, 0, 12));
+            } else if (data.status === 'toxin') {
+              enemy.corrode = Math.min(8, (enemy.corrode || 0) + clamp(Number(data.stacks) || 1, 1, 8));
+              enemy.corrodeT = Math.max(enemy.corrodeT || 0, duration);
+              enemy.burn = Math.max(enemy.burn || 0, clamp(Number(data.burn) || 0, 0, 8));
+            } else if (data.status === 'vuln' && enemy.boss) {
+              enemy.vuln = Math.max(enemy.vuln || 0, duration);
+              enemy.slow = Math.max(enemy.slow || 0, clamp(Number(data.slow) || 0, 0, 12));
+            }
+            return;
+          }
           if (data.type === 'enemy-hit' && MP.isHost) {
             if (state !== 'playing') return;
+            const attacker = MP.remotePlayers.get(data.playerId);
+            if (!attacker || attacker.dead || attacker.roomKey !== mpRoomKey() || performance.now() - attacker.lastSeen > 1500) return;
             const target = enemies.find(e => e.netId === data.netId && !e.dead);
             if (target && Number.isFinite(Number(data.damage))) {
-              const dealt = hurtEnemy(target, Math.min(100000, Math.max(0, Number(data.damage))), { ...(data.options || {}), fromMP: true, mpLifesteal: Number(data.options && data.options.mpLifesteal) || 0 });
+              const dealt = hurtEnemy(target, Math.min(100000, Math.max(0, Number(data.damage))), {
+                ...(data.options || {}), fromMP: true, attackerId: data.playerId,
+                mpLifesteal: Number(data.options && data.options.mpLifesteal) || 0
+              });
               if (dealt > 0) {
-                const attackerHeal = dealt * clamp(Number(data.options && data.options.mpLifesteal) || 0, 0, 1);
+                const attackerHeal = dealt * clamp(Number(data.options && data.options.mpLifesteal) || 0, 0, 1) +
+                  (target.dead ? 3 * (clamp(Number(data.options && data.options.mpLeech) || 0, 0, 10) + 2 * clamp(Number(data.options && data.options.mpVamp) || 0, 0, 10)) : 0);
                 try { MP.socket.send(JSON.stringify({
                   type: 'enemy-damage', netId: target.netId, damage: dealt,
                   hp: Math.max(0, target.hp), dead: !!target.dead,
@@ -3934,6 +3991,10 @@ maxRank = Math.max(maxRank, sr()); ambT -= dt; if (ambT <= 0) { ambT = rand(9, 2
           }
           if (data.type === 'enemy-damage' && !MP.isHost) {
             if (data.roomKey && data.roomKey !== mpRoomKey()) return;
+            if (data.attackerId === MP.id && Number(data.heal) > 0 && !P.dead) {
+              const healed = Math.min(P.maxHp - P.hp, Number(data.heal));
+              if (healed > 0) { P.hp += healed; floatText('+' + Math.round(healed), P.x, P.y - 28, '#c46bff', 13); spark(P.x, P.y, 4, '#c46bff', 170); }
+            }
             const target = enemies.find(e => e.netId === data.netId);
             if (target) {
               const hitX = Number.isFinite(Number(data.x)) ? Number(data.x) : target.x;
@@ -3951,10 +4012,6 @@ maxRank = Math.max(maxRank, sr()); ambT -= dt; if (ambT <= 0) { ambT = rand(9, 2
                 addGlow(hitX, hitY, target.r * 2.2, col, 0.65);
                 shake(target.type === 'tank' ? 3 : 1.5);
                 AudioSys.sfx('hit');
-              }
-              if (data.attackerId === MP.id && Number(data.heal) > 0 && !P.dead) {
-                const healed = Math.min(P.maxHp - P.hp, Number(data.heal));
-                if (healed > 0) { P.hp += healed; floatText('+' + Math.round(healed), P.x, P.y - 28, '#c46bff', 13); }
               }
               if (data.dead && !target.dead) {
                 target.dead = true;
@@ -4051,7 +4108,8 @@ maxRank = Math.max(maxRank, sr()); ambT -= dt; if (ambT <= 0) { ambT = rand(9, 2
           if (data.type === 'xp-request' && MP.isHost) {
             if (state !== 'playing') return;
             const amount = Math.min(10000, Math.max(0, Number(data.amount) || 0));
-            if (amount > 0) addXP(amount);
+            const guestXp = clamp(Number(data.xpStat) || 1, 0.1, 10);
+            if (amount > 0) addXP(amount * guestXp / Math.max(0.1, P.st.xp));
             return;
           }
 
@@ -4276,7 +4334,13 @@ maxRank = Math.max(maxRank, sr()); ambT -= dt; if (ambT <= 0) { ambT = rand(9, 2
           if (r.dun && r.dun.cells) dun = mpClone(r.dun);
           if (dun && dun.cells && r.cellKey) cell = dun.cells[r.cellKey] || cell;
           floorN = Number(r.floorN) || floorN; roomN = Number(r.roomN) || roomN;
+          const previousRoomState = rs;
           rs = r.rs || rs; introT = Number(r.introT) || 0; doorOpen = Number(r.doorOpen) || 0;
+          if (!MP.isHost && r.rs === 'cleared' && previousRoomState !== 'cleared' && P && !P.dead) {
+            const heal = Math.round(P.maxHp * (0.1 + P.st.heal));
+            const actual = Math.min(P.maxHp - P.hp, heal);
+            if (actual > 0) { P.hp += actual; floatText('+' + actual, P.x, P.y - 28, '#7dff6a', 13); }
+          }
           waveQueue = mpClone(r.waveQueue) || waveQueue;
           if (r.obstacles) obstacles = mpClone(r.obstacles);
           if (r.lights) lights = mpClone(r.lights);
