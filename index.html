@@ -1415,10 +1415,15 @@
           }
         } else if (e.type === 'dodger') {
           e.face = e.state === 'dash' ? e.cA : toT; e.cd -= dt;
-          if (e.state === 'dash') { steerDir(e, e.cA, e.speed * 4, 6000, dt); e.st -= dt; if (e.st <= 0) e.state = 'walk'; }
+          if (e.state === 'dash') { steerDir(e, e.cA, e.speed * (floorN >= 6 ? 6.2 : 4), 6000, dt); e.st -= dt; if (e.st <= 0) e.state = 'walk'; }
           else {
-            steerDir(e, toT + Math.sin(e.t * 2.2) * 0.9, e.speed * (wander ? 0.5 : 1), 1500, dt);
-            if (e.cd <= 0) for (const b of bullets) if (dist(b.x, b.y, e.x, e.y) < 110) { e.state = 'dash'; e.st = 0.22; e.cA = Math.atan2(b.y - e.y, b.x - e.x) + (Math.random() < 0.5 ? 1 : -1) * Math.PI / 2; e.cd = 0.9; ring(e.x, e.y, e.r * 2, '#c46bff', 0.25, 2); break; }
+            if (floorN >= 6 && !wander) {
+              steerDir(e, toT, e.speed * (dT < 170 ? 0.7 : 1.15), 1800, dt);
+              if (e.cd <= 0 && dT < 620) { e.state = 'dash'; e.st = 0.48; e.cA = toT; e.cd = 2.8; ring(e.x, e.y, e.r * 2, '#ff3b4a', 0.35, 3); }
+            } else {
+              steerDir(e, toT + Math.sin(e.t * 2.2) * 0.9, e.speed * (wander ? 0.5 : 1), 1500, dt);
+              if (e.cd <= 0) for (const b of bullets) if (dist(b.x, b.y, e.x, e.y) < 110) { e.state = 'dash'; e.st = 0.22; e.cA = Math.atan2(b.y - e.y, b.x - e.x) + (Math.random() < 0.5 ? 1 : -1) * Math.PI / 2; e.cd = 0.9; ring(e.x, e.y, e.r * 2, '#c46bff', 0.25, 2); break; }
+            }
           }
           if (!wander) contactAttack(e, ET.dodger.dmg, tgt, 0.8);
         } else if (e.type === 'guardian') {
