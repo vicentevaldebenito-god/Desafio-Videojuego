@@ -2090,7 +2090,9 @@
       }
 
       function update(dt) {
-        if (!(MP && MP.connected && !MP.isHost && MP.sharedLocked) && pressed.Tab && P && !P.dead && (state === 'playing' || (state === 'inv' && !invPick))) { state = state === 'inv' ? 'playing' : 'inv'; AudioSys.sfx('invopen'); }
+        // El invitado queda completamente congelado hasta que el anfitrión reanude.
+        if (MP && MP.connected && !MP.isHost && MP.sharedLocked) return;
+        if (pressed.Tab && P && !P.dead && (state === 'playing' || (state === 'inv' && !invPick))) { state = state === 'inv' ? 'playing' : 'inv'; AudioSys.sfx('invopen'); }
         time += dt;
         if (pressed.KeyM) AudioSys.toggleMute();
         for (const m of motes) { m.x += Math.sin(time * m.sp + m.ph) * 8 * dt; m.y -= m.v * dt; if (m.y < -10) { m.y = H + 10; m.x = rand(0, W); } }
@@ -2633,7 +2635,10 @@
         for (const e of enemies) if (e.spawnT <= 0) drawEnemy(e);
         drawFlares();
         drawEBullets();
-        if (!P.dead) drawPlayer();
+        if (!P.dead) {
+        drawPlayer();
+        if (MP && MP.connected) txt((MP.isHost ? 'ANFITRIÓN · ' : '') + mpPlayerName, P.x, P.y - P.r - 16, 11, MP.isHost ? '#2ee6ff' : '#37ffb0', 'center', 5);
+      }
 
 // Dibujar compañeros
 for (const remote of MP.remotePlayers.values()) {
@@ -2641,11 +2646,11 @@ for (const remote of MP.remotePlayers.values()) {
     drawPlayer(remote);
 
     txt(
-        'ALIADO',
+        (remote.isHost ? 'ANFITRIÓN · ' : '') + (remote.name || 'Jugador'),
         remote.x,
         remote.y - remote.r - 16,
         11,
-        '#37ffb0',
+        remote.isHost ? '#2ee6ff' : '#37ffb0',
         'center',
         5
     );
@@ -2694,7 +2699,7 @@ for (const remote of MP.remotePlayers.values()) {
           for (const remote of MP.remotePlayers.values()) {
             if (remote.roomKey !== mpRoomKey()) continue;
             const f = clamp((remote.hp || 0) / Math.max(1, remote.maxHp || 1), 0, 1);
-            ctx.globalAlpha = 0.9; panel(14, yy, 190, 31); txt('ALIADO', 23, yy + 12, 9, '#37ffb0');
+            ctx.globalAlpha = 0.9; panel(14, yy, 190, 31); txt((remote.isHost ? 'ANFITRIÓN · ' : '') + (remote.name || 'Jugador'), 23, yy + 12, 9, remote.isHost ? '#2ee6ff' : '#37ffb0');
             bar(23, yy + 17, 170, 6, f, f > 0.5 ? '#37ffb0' : f > 0.25 ? '#ffb13b' : '#ff3b4a');
             txt(Math.ceil(remote.hp || 0) + '/' + (remote.maxHp || 0), 198, yy + 12, 8, '#fff', 'right'); yy += 36;
           }
@@ -3024,6 +3029,7 @@ for (const remote of MP.remotePlayers.values()) {
 
     <div class="mp-separator"></div>
 
+    <input id="mp-name" maxlength="16" placeholder="TU NOMBRE" autocomplete="nickname" spellcheck="false">
     <button id="mp-create">CREAR SALA</button>
 
     <div class="mp-or">— O UNIRSE A UNA SALA —</div>
@@ -3136,6 +3142,12 @@ for (const remote of MP.remotePlayers.values()) {
     border-color:#2ee6ff;
     box-shadow:0 0 12px rgba(46,230,255,.2);
 }
+#abyssal-multiplayer #mp-name {
+    margin:0 0 12px;
+    font-size:14px;
+    letter-spacing:1px;
+    text-align:left;
+}
 
 #abyssal-multiplayer .mp-or {
     margin:14px 0;
@@ -3160,6 +3172,18 @@ for (const remote of MP.remotePlayers.values()) {
       document.body.appendChild(mpUI);
 
       const mpStatus = document.getElementById("mp-status");
+      const mpNameInput = document.getElementById("mp-name");
+      const MP_NAME_KEY = "abyssal-redo-player-name";
+      function mpCleanName(value) {
+        const clean = String(value || "").replace(/[<>\\r\\n]/g, "").trim().slice(0, 16);
+        return clean || "Jugador";
+      }
+      let mpPlayerName = mpCleanName(localStorage.getItem(MP_NAME_KEY) || "Jugador");
+      mpNameInput.value = mpPlayerName;
+      mpNameInput.addEventListener("input", () => {
+        mpPlayerName = mpCleanName(mpNameInput.value);
+        try { localStorage.setItem(MP_NAME_KEY, mpPlayerName); } catch {}
+      });
 
       function mpMessage(message) {
         mpStatus.textContent = message;
@@ -3236,6 +3260,8 @@ for (const remote of MP.remotePlayers.values()) {
                 ta: angle,
                 r: 16,
                 weapon: 0,
+                name: mpCleanName(data.name || "Jugador"),
+                isHost: data.id === MP.hostId,
                 kick: 0,
                 dashT: 0,
                 iframes: 0,
@@ -3251,6 +3277,8 @@ for (const remote of MP.remotePlayers.values()) {
             remote.tx = x;
             remote.ty = y;
             remote.ta = angle;
+            remote.name = mpCleanName(data.name || remote.name || "Jugador");
+            remote.isHost = data.id === MP.hostId;
             remote.r = Number(data.r) || 16;
             remote.weapon = data.weapon === 1 ? 1 : 0;
             remote.kick = Number(data.kick) || 0;
@@ -3410,7 +3438,7 @@ for (const remote of MP.remotePlayers.values()) {
         // El estado de juego y las cartas de mejora los decide el anfitrión.
         if (typeof data.gameState === 'string' && ['playing', 'paused', 'upgrade', 'shop', 'class', 'lock', 'dive', 'gameover', 'victory'].includes(data.gameState)) {
           state = data.gameState;
-          MP.sharedLocked = state === 'paused' || state === 'upgrade';
+          MP.sharedLocked = state === 'paused' || state === 'upgrade' || state === 'shop' || state === 'class' || state === 'lock';
         }
         if (state === 'upgrade' && Array.isArray(data.upgradeCards)) cards = data.upgradeCards.map(c => ({ ...c }));
         else if (state !== 'upgrade') cards = [];
@@ -3462,6 +3490,7 @@ for (const remote of MP.remotePlayers.values()) {
               MP.socket.send(JSON.stringify({
                 type: 'player-state',
                 id: MP.id,
+                name: mpPlayerName,
                 x: P.x,
                 y: P.y,
                 angle: P.angle,
