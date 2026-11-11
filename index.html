@@ -762,9 +762,34 @@
       /* ---------------------------------------------------------------------
          8. ARMAS
          --------------------------------------------------------------------- */
+      // Replica visualmente los ataques de cada jugador. El daño real sigue siendo
+      // autoritativo del anfitrión; estos proyectiles remotos son solo efectos.
+      function mpSendAttackVisual(type, bullet) {
+        if (!MP || !MP.connected || !MP.socket || MP.socket.readyState !== WebSocket.OPEN) return;
+        try {
+          MP.socket.send(JSON.stringify({
+            type: 'player-attack',
+            ownerId: MP.id,
+            attack: {
+              kind: type,
+              x: Number(bullet.x) || 0,
+              y: Number(bullet.y) || 0,
+              vx: Number(bullet.vx) || 0,
+              vy: Number(bullet.vy) || 0,
+              a: Number(bullet.a) || 0,
+              life: clamp(Number(bullet.life) || 0.3, 0.05, 2),
+              r: Number(bullet.r) || (type === 'harpoon' ? 5 : 6)
+            },
+            roomKey: mpRoomKey()
+          }));
+        } catch (error) {
+          console.warn('[MP] No se pudo replicar el ataque:', error);
+        }
+      }
+
       function fireHarpoon() {
         const p = P, a = p.angle, c = Math.cos(a), s = Math.sin(a), m = 1 + 0.3 * has('harpoon');
-        bullets.push({ type: 'harpoon', x: p.x + c * 24, y: p.y + s * 24, vx: c * 1500, vy: s * 1500, a, dmg: 60 * m, life: 1.1, hit: new Set(), carried: [], stuck: false, stuckT: 0, vib: 0 });
+        const shot = { type: 'harpoon', x: p.x + c * 24, y: p.y + s * 24, vx: c * 1500, vy: s * 1500, a, dmg: 60 * m, life: 1.1, hit: new Set(), carried: [], stuck: false, stuckT: 0, vib: 0 }; bullets.push(shot); mpSendAttackVisual('harpoon', shot);
         p.cdMax[0] = 0.62 * (1 - 0.15 * has('harpoon')); p.cd[0] = p.cdMax[0];
         p.vx -= c * 190; p.vy -= s * 190; p.kick = 0.12;
         spark(p.x + c * 26, p.y + s * 26, 10, '#9fd0ff', 420, a, 0.6); bubbles(p.x + c * 26, p.y + s * 26, 5, 8);
@@ -846,14 +871,14 @@
       }
       function fireAcid() {
         const p = P, a = p.angle + rand(-0.17, 0.17), spd = rand(620, 760), m = 1 + 0.25 * has('chamber');
-        bullets.push({ type: 'acid', x: p.x + Math.cos(p.angle) * 22, y: p.y + Math.sin(p.angle) * 22, vx: Math.cos(a) * spd + p.vx * 0.3, vy: Math.sin(a) * spd + p.vy * 0.3, a, dmg: 7 * m, life: 0.36, r: 6 });
+        const shot = { type: 'acid', x: p.x + Math.cos(p.angle) * 22, y: p.y + Math.sin(p.angle) * 22, vx: Math.cos(a) * spd + p.vx * 0.3, vy: Math.sin(a) * spd + p.vy * 0.3, a, dmg: 7 * m, life: 0.36, r: 6 }; bullets.push(shot); mpSendAttackVisual('acid', shot);
         p.vx -= Math.cos(p.angle) * 12; p.vy -= Math.sin(p.angle) * 12;
         if (Math.random() < 0.5) addP({ kind: 'ember', x: p.x + Math.cos(p.angle) * 24, y: p.y + Math.sin(p.angle) * 24, vx: Math.cos(a) * 200, vy: Math.sin(a) * 200, life: 0.25, size: 3, color: '#7dff6a', drag: 3 });
         shake(1.6); AudioSys.sfx('acid');
       }
       function fireFlare() {
         const p = P, a = p.angle, d = clamp(dist(p.x, p.y, mouse.x, mouse.y), 90, 700);
-        bullets.push({ type: 'flare', x: p.x + Math.cos(a) * 22, y: p.y + Math.sin(a) * 22, vx: Math.cos(a) * 800, vy: Math.sin(a) * 800, a, life: d / 800, r: 6 });
+        const shot = { type: 'flare', x: p.x + Math.cos(a) * 22, y: p.y + Math.sin(a) * 22, vx: Math.cos(a) * 800, vy: Math.sin(a) * 800, a, life: d / 800, r: 6 }; bullets.push(shot); mpSendAttackVisual('flare', shot);
         p.secMax[1] = 4 * (1 - 0.3 * has('flarex')); p.sec[1] = p.secMax[1];
         spark(p.x + Math.cos(a) * 24, p.y + Math.sin(a) * 24, 8, '#e8ff4a', 260, a, 0.7);
         shake(3); AudioSys.sfx('flare');
@@ -1767,6 +1792,9 @@
         else if (id === 'saw') { xwList.push({ k: 'saw', t: 0, a: 0 }); xcd = 8; }
         else if (id === 'anchor') { xwList.push({ k: 'anchor', x: P.x, y: P.y, vx: Math.cos(a) * 700, vy: Math.sin(a) * 700, t: 0 }); xcd = 4; }
         else { xwList.push({ k: 'medusa', x: P.x, y: P.y, vx: Math.cos(a) * 220, vy: Math.sin(a) * 220, t: 0 }); xcd = 0.9; }
+        const fx = xwList[xwList.length - 1];
+        if (fx && (fx.k === 'anchor' || fx.k === 'medusa')) mpSendAttackVisual(fx.k, { x: fx.x, y: fx.y, vx: fx.vx, vy: fx.vy, a, life: fx.k === 'anchor' ? 1.2 : 0.8, r: fx.k === 'anchor' ? 9 : 12 });
+        else mpSendAttackVisual(fx ? fx.k : 'special', { x: P.x, y: P.y, vx: Math.cos(a) * 220, vy: Math.sin(a) * 220, a, life: 0.45, r: 12 });
         addStyle(3, 'ARMA'); AudioSys.sfx('ui');
       }
       function invRect(i) { return [60, 150 + i * 96, 360, 84]; }
@@ -2699,6 +2727,30 @@
           }
         }
       }
+      function drawRemoteBullets() {
+        for (const b of MP.remoteBullets) {
+          ctx.save();
+          ctx.translate(b.x, b.y);
+          ctx.rotate(b.a || Math.atan2(b.vy, b.vx));
+          if (b.kind === 'harpoon' || b.kind === 'anchor') {
+            ctx.strokeStyle = '#d9efff'; ctx.lineWidth = 3; ctx.lineCap = 'round';
+            ctx.beginPath(); ctx.moveTo(-34, 0); ctx.lineTo(8, 0); ctx.stroke();
+            ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.moveTo(10, 0); ctx.lineTo(-3, -5); ctx.lineTo(-3, 5); ctx.closePath(); ctx.fill();
+            addGlow(b.x, b.y, 34, '#9fd0ff', 0.65);
+          } else if (b.kind === 'acid') {
+            ctx.fillStyle = '#b6ff3b'; ctx.beginPath(); ctx.arc(0, 0, b.r || 6, 0, TAU); ctx.fill();
+            addGlow(b.x, b.y, 24, '#7dff6a', 0.8);
+          } else if (b.kind === 'flare') {
+            ctx.fillStyle = '#fffbb0'; ctx.beginPath(); ctx.arc(0, 0, b.r || 6, 0, TAU); ctx.fill();
+            addGlow(b.x, b.y, 38, '#e8ff4a', 0.9);
+          } else {
+            ctx.fillStyle = '#8feaff'; ctx.beginPath(); ctx.arc(0, 0, b.r || 8, 0, TAU); ctx.fill();
+            addGlow(b.x, b.y, 30, '#2ee6ff', 0.7);
+          }
+          ctx.restore();
+        }
+      }
+
       function drawEBullets() {
         for (const b of ebullets) {
           ctx.fillStyle = b.fr ? '#fffbb0' : '#ffd0f4'; ctx.beginPath(); ctx.arc(b.x, b.y, b.r * 0.55, 0, TAU); ctx.fill();
@@ -2817,6 +2869,7 @@
         drawCaustics();
         drawPools(); drawClouds(); drawSecret();
         drawBullets();
+        drawRemoteBullets();
         drawPickups();
         for (const e of enemies) if (e.spawnT > 0) drawEnemy(e);
         for (const e of enemies) if (e.spawnT <= 0) drawEnemy(e);
@@ -3627,6 +3680,24 @@ for (const remote of MP.remotePlayers.values()) {
             return;
           }
 
+          if (data.type === 'player-attack' && data.ownerId !== MP.id) {
+            if (data.roomKey && data.roomKey !== mpRoomKey()) return;
+            const a = data.attack || {};
+            if (!['harpoon', 'acid', 'flare', 'anchor', 'medusa', 'mine', 'saw', 'special'].includes(a.kind)) return;
+            if (![a.x, a.y, a.vx, a.vy].every(v => Number.isFinite(Number(v)))) return;
+            MP.remoteBullets.push({
+              kind: a.kind,
+              x: Number(a.x), y: Number(a.y),
+              vx: Number(a.vx), vy: Number(a.vy),
+              a: Number(a.a) || 0,
+              life: clamp(Number(a.life) || 0.3, 0.05, 2),
+              r: clamp(Number(a.r) || 6, 2, 24),
+              ownerId: data.ownerId
+            });
+            if (MP.remoteBullets.length > 80) MP.remoteBullets.splice(0, MP.remoteBullets.length - 80);
+            return;
+          }
+
           if (data.type === 'revive-hold' && data.targetId === MP.id && data.helperId !== MP.id) {
             if (!data.roomKey || data.roomKey === mpRoomKey()) {
               MP.reviveHolds.set(data.helperId, { holding: !!data.holding, at: performance.now() });
@@ -3673,14 +3744,32 @@ for (const remote of MP.remotePlayers.values()) {
             if (data.roomKey && data.roomKey !== mpRoomKey()) return;
             const target = enemies.find(e => e.netId === data.netId);
             if (target) {
+              const hitX = Number.isFinite(Number(data.x)) ? Number(data.x) : target.x;
+              const hitY = Number.isFinite(Number(data.y)) ? Number(data.y) : target.y;
+              const dealt = Math.max(0, Number(data.damage) || 0);
               target.hp = Math.max(0, Number(data.hp) || 0);
-              target.flash = 0.12;
-              if (Number(data.damage) > 0) {
-                floatText(Math.round(Number(data.damage)), Number(data.x) || target.x, (Number(data.y) || target.y) - target.r - 7, '#ffffff', 14);
-                spark(Number(data.x) || target.x, Number(data.y) || target.y, 4, '#d8f7ff', 180);
+              target.flash = 0.22;
+              target.hitT = 0.22;
+              if (dealt > 0) {
+                const col = (ET[target.type] && ET[target.type].color) || '#d8f7ff';
+                floatText(Math.round(dealt), hitX + rand(-8, 8), hitY - target.r - 9, '#ffffff', dealt >= 18 ? 17 : 14);
+                spark(hitX, hitY, 9, col, 300);
+                blood(hitX, hitY, target.type === 'tank' ? 7 : 4, target.type === 'tank' ? '#8a7a20' : '#1fa89a', null, 220);
+                ring(hitX, hitY, Math.max(12, target.r * 1.5), col, 0.28, 2.5);
+                addGlow(hitX, hitY, target.r * 2.2, col, 0.65);
+                shake(target.type === 'tank' ? 3 : 1.5);
                 AudioSys.sfx('hit');
               }
-              if (data.dead) target.dead = true;
+              if (data.dead && !target.dead) {
+                target.dead = true;
+                const col = (ET[target.type] && ET[target.type].color) || '#ff4fd8';
+                blood(hitX, hitY, target.type === 'tank' ? 18 : 10, target.type === 'tank' ? '#8a7a20' : '#1fa89a', null, 300);
+                spark(hitX, hitY, 12, col, 340);
+                bubbles(hitX, hitY, 8, target.r);
+                ring(hitX, hitY, target.r * 2.5, col, 0.35, 3);
+                boomFx(hitX, hitY, target.boss ? 150 : 55, col, '#3bd98a');
+                AudioSys.sfx(target.boss ? 'boom' : 'kill', !!target.boss);
+              }
             }
             return;
           }
@@ -4168,6 +4257,16 @@ for (const remote of MP.remotePlayers.values()) {
         }
 
         mpSendWorld(dt);
+
+        // Los proyectiles de compañeros son únicamente visuales: nunca colisionan
+        // ni aplican daño local, para evitar duplicar el cálculo autoritativo.
+        for (let i = MP.remoteBullets.length - 1; i >= 0; i--) {
+          const b = MP.remoteBullets[i];
+          b.life -= dt;
+          b.x += b.vx * dt;
+          b.y += b.vy * dt;
+          if (b.life <= 0) MP.remoteBullets.splice(i, 1);
+        }
 
         // Suaviza las posiciones de los enemigos recibidas del anfitrión.
         if (!MP.isHost) {
