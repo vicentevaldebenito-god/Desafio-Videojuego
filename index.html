@@ -3151,6 +3151,8 @@ for (const remote of MP.remotePlayers.values()) {
 
     <div class="mp-separator"></div>
 
+    <button id="mp-leave" style="display:none">ABANDONAR SALA</button>
+
     <button id="mp-close">VOLVER [ESC]</button>
 </div>
 `;
@@ -3293,6 +3295,33 @@ for (const remote of MP.remotePlayers.values()) {
         mpUI.style.display = show ? "flex" : "none";
       }
 
+      function mpResetSession(message = "DESCONECTADO") {
+        MP.connected = false;
+        MP.players = 0;
+        MP.hostId = null;
+        MP.isHost = false;
+        MP.sharedLocked = false;
+        MP.remotePlayers.clear();
+        MP.remoteBullets = [];
+        MP.room = null;
+        MP.localUpgradeOpen = false;
+        MP.localUpgradeDone = false;
+        document.getElementById("mp-leave").style.display = "none";
+        mpUpdateCount();
+        mpMessage(message);
+        state = "menu";
+        mpToggle(true);
+      }
+
+      function mpLeaveRoom(message = "HAS ABANDONADO LA SALA") {
+        const socket = MP.socket;
+        MP.socket = null;
+        if (socket && (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING)) {
+          try { socket.close(1000, "leave"); } catch {}
+        }
+        mpResetSession(message);
+      }
+
       function mpUpdateCount() {
         document.getElementById("mp-count").textContent =
           "JUGADORES: " + MP.players + "/4";
@@ -3329,6 +3358,7 @@ for (const remote of MP.remotePlayers.values()) {
 
         socket.onopen = () => {
           MP.connected = true;
+          document.getElementById("mp-leave").style.display = "block";
           mpMessage("CONECTADO");
         };
 
@@ -3423,6 +3453,11 @@ for (const remote of MP.remotePlayers.values()) {
             return;
           }
 
+          if (data.type === "host-left") {
+            mpResetSession("EL ANFITRIÓN ABANDONÓ · PARTIDA TERMINADA");
+            return;
+          }
+
           if (data.type === "welcome") {
             if (data.id) MP.id = data.id;
             MP.hostId = data.hostId || null;
@@ -3461,8 +3496,14 @@ for (const remote of MP.remotePlayers.values()) {
           mpMessage("ERROR DE CONEXIÓN");
         };
 
-        socket.onclose = () => {
+        socket.onclose = event => {
           if (MP.socket !== socket) return;
+          MP.socket = null;
+
+          if (event.code === 4001 || event.reason === "host-left") {
+            mpResetSession("EL ANFITRIÓN ABANDONÓ · PARTIDA TERMINADA");
+            return;
+          }
 
           MP.connected = false;
           MP.players = 0;
@@ -3705,6 +3746,10 @@ for (const remote of MP.remotePlayers.values()) {
       };
 
       // Volver al juego
+      document.getElementById("mp-leave").onclick = () => {
+        mpLeaveRoom();
+      };
+
       document.getElementById("mp-close").onclick = () => {
         mpToggle(false);
       };
