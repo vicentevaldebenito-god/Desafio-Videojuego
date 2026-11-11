@@ -2941,9 +2941,17 @@ for (const remote of MP.remotePlayers.values()) {
         ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over'; ctx.shadowBlur = 0;
         ctx.fillStyle = '#02050a'; ctx.fillRect(0, 0, W, H);
         if (state === 'menu') {
-          drawMenu(); menuFX(); if (tutMenu) drawTut(); if (bestMenu) drawBest(); if (!tutMenu && !bestMenu && !optMenu && !charMenu) {
+          drawMenu();
+          menuFX();
+          if (tutMenu) drawTut();
+          if (bestMenu) drawBest();
+          if (charMenu) drawChar();
+          if (!tutMenu && !bestMenu && !optMenu && !charMenu) {
             txt('[I] INFINITO · [H] TUTORIAL · [B] BESTIARIO · [O] OPCIONES · [C] PERSONAJE · [E] MULTIJUGADOR', W / 2, H - 40, 14, '#ff4fd8', 'center', 8);
-          } drawFX(); drawCursor(); return;
+          }
+          drawFX();
+          drawCursor();
+          return;
         }
         const sx = (Math.random() * 2 - 1) * shakeMag, sy = (Math.random() * 2 - 1) * shakeMag;
         ctx.save(); ctx.translate(sx, sy);
