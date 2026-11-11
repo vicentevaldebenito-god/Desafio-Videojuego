@@ -2735,10 +2735,22 @@
         for (const e of enemies) if (e.spawnT <= 0) drawEnemy(e);
         drawFlares();
         drawEBullets();
-        if (!P.dead) {
-        drawPlayer();
-        if (MP && MP.connected) txt((MP.isHost ? 'ANFITRIÓN · ' : '') + mpPlayerName, P.x, P.y - P.r - 16, 11, MP.isHost ? '#2ee6ff' : '#37ffb0', 'center', 5);
-      }
+        // El cuerpo permanece visible mientras está caído para que el equipo pueda localizarlo y revivirlo.
+        if (!P.dead || (MP && MP.connected)) {
+          ctx.save();
+          if (P.dead) { ctx.globalAlpha = 0.48; }
+          drawPlayer();
+          ctx.restore();
+          if (MP && MP.connected) {
+            txt(P.dead ? 'CAÍDO · ' + mpPlayerName : (MP.isHost ? 'ANFITRIÓN · ' : '') + mpPlayerName,
+              P.x, P.y - P.r - 16, 11, P.dead ? '#ff6b6b' : (MP.isHost ? '#2ee6ff' : '#37ffb0'), 'center', 5);
+            if (P.dead) {
+              ctx.save(); ctx.strokeStyle = '#ff6b6b'; ctx.lineWidth = 3;
+              ctx.beginPath(); ctx.arc(P.x, P.y, P.r + 9, 0, TAU); ctx.stroke();
+              ctx.restore();
+            }
+          }
+        }
 
 // Dibujar compañeros
 for (const remote of MP.remotePlayers.values()) {
@@ -2798,13 +2810,13 @@ for (const remote of MP.remotePlayers.values()) {
           if (P.dead) {
             const left = Math.max(0, 30 - (Date.now() - (P.deadAt || Date.now())) / 1000);
             panel(W / 2 - 190, 104, 380, 74);
-            txt('CAÍDO · ESPERANDO REVIVIR', W / 2, 127, 17, '#ff6b6b', 'center', 8);
+            txt('ESTÁS CAÍDO · ESPERA A UN COMPAÑERO', W / 2, 127, 16, '#ff6b6b', 'center', 8);
             bar(W / 2 - 160, 143, 320, 9, MP.reviveProgress / 10, '#7dff6a');
-            txt('MANTÉN F CERCA · ' + Math.ceil(left) + 's', W / 2, 166, 12, '#fff', 'center');
+            txt('TIEMPO PARA REVIVIR: ' + Math.ceil(left) + 's', W / 2, 166, 12, '#fff', 'center');
           } else if (MP.reviveProgressTarget) {
             panel(W / 2 - 170, 104, 340, 50);
-            txt('MANTÉN F PARA REVIVIR', W / 2, 124, 15, '#7dff6a', 'center', 7);
-            txt('ACÉRCATE AL COMPAÑERO CAÍDO', W / 2, 142, 10, '#d9eaff', 'center');
+            txt('MANTÉN F PARA REVIVIR AL COMPAÑERO', W / 2, 124, 14, '#7dff6a', 'center', 7);
+            txt('TÚ DEBES ESTAR CERCA DEL JUGADOR CAÍDO', W / 2, 142, 10, '#d9eaff', 'center');
           }
           let yy = 190;
           for (const remote of MP.remotePlayers.values()) {
