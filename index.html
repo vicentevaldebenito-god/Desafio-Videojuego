@@ -963,20 +963,42 @@
         o = o || {};
         if (e.dead || e.spawnT > 0 || e.orbit > 0) return 0;
         if (MP && MP.connected && !MP.isHost && !o.fromMP) {
-          if (e.netId && MP.socket && MP.socket.readyState === WebSocket.OPEN) MP.socket.send(JSON.stringify({ type: 'enemy-hit', netId: e.netId, damage: Math.max(0, Number(dmg) || 0), options: { ang: Number.isFinite(o.ang) ? o.ang : undefined, ignoreArmor: !!o.ignoreArmor, noText: !!o.noText } }));
+          if (e.netId && MP.socket && MP.socket.readyState === WebSocket.OPEN) MP.socket.send(JSON.stringify({
+            type: 'enemy-hit', netId: e.netId, damage: Math.max(0, Number(dmg) || 0),
+            options: {
+              ang: Number.isFinite(o.ang) ? o.ang : undefined,
+              ignoreArmor: !!o.ignoreArmor, noText: !!o.noText,
+              mpDamageMultiplier: P.st.dmg * (1 + 0.3 * chm('might')) *
+                (1 + 0.05 * sr()) * (1 + 0.04 * chm('streak') * streak) *
+                wlv(P.slots[P.weapon]),
+              mpLifesteal: Math.max(0, Number(P.st.ls) || 0)
+            }
+          }));
           return 0;
         }
         if (e.boss && bfl() === 4) { if (e.parryT > 0) { e.reflect = true; return 0; } if (e.dodgeT > 0) return 0; if (!(e.ecd > 0)) { const rr = Math.random(); if (rr < 0.28) { e.parryT = 0.5; e.ecd = 2.2; ring(e.x, e.y, 70, '#ffffff', 0.4, 6); AudioSys.sfx('parry'); return 0; } else if (rr < 0.5) { e.dodgeT = 0.3; e.dodgeA = Math.atan2(P.y - e.y, P.x - e.x) + (Math.random() < 0.5 ? 1 : -1) * Math.PI / 2; e.ecd = 1.6; return 0; } } }
         if (e.boss && bfl() === 6) dmg *= Math.max(0.35, 1 - 0.03 * (enemies.length - 1));
         let m = 1, crit = false;
         if (e.marked > 0) { m *= 1.75; crit = true; }
-        m *= 1 + 0.08 * e.corrode; m *= 1 + 0.3 * chm('might'); if (e.vuln > 0) m *= 2.2; m *= 1 + 0.05 * sr(); m *= P.st.dmg * (1 + 0.04 * chm('streak') * streak) * wlv(P.slots[P.weapon]); if (P.st.ls > 0 && !P.dead) P.hp = Math.min(P.maxHp, P.hp + dmg * m * P.st.ls);
+        m *= 1 + 0.08 * e.corrode;
+        if (Number.isFinite(o.mpDamageMultiplier)) m *= clamp(o.mpDamageMultiplier, 0.05, 25);
+        else m *= (1 + 0.3 * chm('might')) * (1 + 0.05 * sr()) *
+          P.st.dmg * (1 + 0.04 * chm('streak') * streak) * wlv(P.slots[P.weapon]);
+        if (e.vuln > 0) m *= 2.2;
         if (e.type !== 'guardian') for (const g of enemies) if (g.type === 'guardian' && !g.dead && g.spawnT <= 0 && dist(g.x, g.y, e.x, e.y) < 190) { m *= 0.6; break; }
         let blocked = false;
         if (e.type === 'tank' && !o.ignoreArmor && o.ang !== undefined && e.corrode < 3 && e.pinned === null) {
           if (Math.abs(angDiff(o.ang + Math.PI, e.face)) < 1.2) { m *= (o.armorMul || 0.2); blocked = true; }
         }
         const d = dmg * m;
+        const steal = Number.isFinite(o.mpLifesteal) ? o.mpLifesteal : P.st.ls;
+        if (steal > 0 && !P.dead && d > 0 && !(MP && MP.connected && MP.isHost && o.fromMP)) {
+          const healed = Math.min(P.maxHp - P.hp, d * Math.max(0, steal));
+          if (healed > 0) {
+            P.hp += healed;
+            if (healed >= 1) floatText('+' + Math.round(healed), P.x, P.y - 28, '#c46bff', 13);
+          }
+        }
         e.hp -= d; e.flash = 0.1;
         if (blocked && d > 5 && Math.random() < 0.6) { spark(e.x, e.y, 3, '#ffd23f', 260); AudioSys.sfx('hit'); }
         else AudioSys.sfx('hit');
@@ -993,6 +1015,10 @@
         const pts = 0; kills++; if (e.type !== 'bait') { addStyle(e.boss ? 40 : e.mini ? 25 : 5, e.boss || e.mini ? 'BOSS' : 'KILL'); dropXP(e, e.boss ? 200 : e.mini ? 50 : 5); P.dashCd = Math.max(0, P.dashCd - 0.35); meta.kills++; meta.t[e.type] = (meta.t[e.type] || 0) + 1; streak = Math.min(15, streak + 1); streakT = 4; }
         const col = ET[e.type].color;
         if (e.boss) {
+          // Al morir el jefe, elimina sus refuerzos y proyectiles restantes.
+          for (const add of enemies) if (add !== e) add.dead = true;
+          waveQueue.length = 0;
+          ebullets.length = 0;
           boomFx(e.x, e.y, 220, col, '#3bd98a'); shake(24); hitstop = 0.3; AudioSys.sfx('boom', true); AudioSys.sfx('kill');
           for (let i = 0; i < 4; i++) setTimeout(() => { if (state === 'playing') { boomFx(e.x + rand(-60, 60), e.y + rand(-60, 60), 100, col, '#3bd98a'); shake(14); AudioSys.sfx('boom', true); } }, i * 220);
           for (let i = 0; i < 6; i++) pickups.push({ x: e.x + rand(-40, 40), y: e.y + rand(-40, 40), vx: rand(-120, 120), vy: rand(-120, 120), heal: 12, t: 0 });
@@ -1896,40 +1922,132 @@
         { n: 'CAZARRECOMPENSAS', col: '#ffd23f', pass: '+10% de daño.', f: 'Marca una presa: al matarla suelta 15 órganos y XP extra (15 s de espera)', fn: 'PRESA', cd: 15 },
         { n: 'INGENIERO', col: '#6ae0ff', pass: '+1 reroll de mejoras.', f: 'Despliega 3 peces mecánicos 12 s que atacan a los enemigos (20 s de espera)', fn: 'ROBOTS', cd: 20 },
         { n: 'TANQUE', col: '#ff9a5a', pass: 'x2 de vida y 25% menos de daño recibido.', f: 'Provocar: atrae a los enemigos y reduce el daño un 50% durante 5 s (18 s de espera)', fn: 'PROVOCAR', cd: 18 },
-        { n: 'MÉDICO', col: '#7dff6a', pass: '+5% de curación por sala.', f: 'Cada 30 s cura la mitad de tu vida máxima', fn: 'CURAR', cd: 30 }
+        { n: 'MÉDICO', col: '#7dff6a', pass: '+5% de curación por sala.', f: 'Cada 30 s cura la mitad de tu vida máxima', fn: 'CURAR', cd: 30 },
+        { n: 'EXPLORADOR', col: '#2ee6ff', pass: '+12% de velocidad y sonar ampliado.', f: 'Revela y marca a todos los enemigos durante 6 s', fn: 'SONAR', cd: 18 },
+        { n: 'ELECTROCUTADOR', col: '#ffe94a', pass: '+12% de cadencia.', f: 'Descarga eléctrica que salta entre enemigos cercanos', fn: 'CADENA', cd: 16 },
+        { n: 'ALQUIMISTA', col: '#7dff6a', pass: '+2% de robo de vida.', f: 'Explosión tóxica: corroe y quema a los enemigos', fn: 'TOXINA', cd: 20 },
+        { n: 'ORÁCULO', col: '#c46bff', pass: '+15% de suerte de rareza.', f: 'Frena a los enemigos y deja vulnerables a los jefes', fn: 'TIEMPO', cd: 22 },
+        { n: 'DEMOLEDOR', col: '#ff8a3b', pass: '+8% de daño.', f: 'Onda sísmica que daña y repele a los enemigos', fn: 'SISMO', cd: 17 }
       ];
-      function applyChar() { P.path = null; P.tier = 0; cpend = 0; P.char = cfg.char || 0; P.fcd = 0; P.fmax = CHARS[P.char].cd; if (P.char === 1) P.st.dmg += 0.1; else if (P.char === 2) P.rr = (P.rr || 0) + 1; else if (P.char === 3) { P.maxHp *= 2; P.hp = P.maxHp; P.dr = 0.75; } else if (P.char === 4) P.st.heal += 0.05; bots = []; }
+      function applyChar() {
+        P.path = null; P.tier = 0; cpend = 0;
+        P.char = clamp(Number(cfg.char) || 0, 0, CHARS.length - 1);
+        cfg.char = P.char; P.fcd = 0; P.fmax = CHARS[P.char].cd;
+        if (P.char === 1) P.st.dmg += 0.1;
+        else if (P.char === 2) P.rr = (P.rr || 0) + 1;
+        else if (P.char === 3) { P.maxHp *= 2; P.hp = P.maxHp; P.dr = 0.75; }
+        else if (P.char === 4) P.st.heal += 0.05;
+        else if (P.char === 5) P.st.spd += 0.12;
+        else if (P.char === 6) P.st.rate += 0.12;
+        else if (P.char === 7) P.st.ls += 0.02;
+        else if (P.char === 8) P.st.luck += 0.15;
+        else if (P.char === 9) P.st.dmg += 0.08;
+        bots = [];
+      }
       function specialF() {
         const c = P.char; if (!c || P.fcd > 0) return;
         if (c === 1) { const t = enemies.filter(e => !e.dead && e.spawnT <= 0 && !e.boss && !e.bounty).sort((a, b) => dist(a.x, a.y, P.x, P.y) - dist(b.x, b.y, P.x, P.y)); if (!t.length) return; for (const q of t.slice(0, 1 + (P.path === 'B' ? P.tier : 0))) { q.bounty = true; floatText('¡PRESA MARCADA!', q.x, q.y - 30, '#ffd23f', 16); ring(q.x, q.y, 60, '#ffd23f', 0.5, 4); } }
         else if (c === 2) { const nB = 3 + (P.path === 'A' ? 2 * P.tier : 0), big = P.path === 'B' ? 1 + 0.5 * P.tier : 1; for (let i = 0; i < nB; i++) bots.push({ x: P.x + rand(-30, 30), y: P.y + rand(-30, 30), t: 12 + (P.path === 'B' ? 3 * P.tier : 0), cd: 0, a: i * TAU / nB, big }); ring(P.x, P.y, 80, '#6ae0ff', 0.5, 4); }
         else if (c === 3) { if (P.path === 'B') { P.invT = 2 + 0.5 * P.tier; P.vulnT = 0; } else P.aggro = 5; ring(P.x, P.y, 300, '#ff9a5a', 0.6, 6); shake(10); }
         else if (c === 4) { const fr = 0.5 + (P.path === 'A' ? 0.15 * P.tier : 0); P.hp = Math.min(P.maxHp, P.hp + P.maxHp * fr); floatText('+' + Math.round(P.maxHp * fr), P.x, P.y - 40, '#7dff6a', 20); ring(P.x, P.y, 120, '#7dff6a', 0.6, 5); if (P.path === 'B') { P.shield += P.tier; P.iframes = Math.max(P.iframes, P.tier); } }
-        P.fcd = P.fmax - (c === 4 && P.path === 'A' ? 3 * P.tier : 0); AudioSys.sfx('upgrade');
+        else if (c === 5) {
+          P.revealT = 6 + (P.path === 'A' ? P.tier * 1.5 : 0);
+          for (const e of enemies) if (!e.dead && e.spawnT <= 0) { e.marked = Math.max(e.marked || 0, 4 + (P.path === 'B' ? P.tier * 1.5 : 0)); ring(e.x, e.y, e.r + 28, '#2ee6ff', 0.45, 3); }
+          ring(P.x, P.y, 520, '#2ee6ff', 0.65, 5);
+        }
+        else if (c === 6) {
+          let from = { x: P.x, y: P.y }, used = new Set();
+          const count = 4 + (P.path === 'A' ? P.tier : P.path === 'B' ? P.tier * 2 : 0);
+          for (let k = 0; k < count; k++) {
+            const target = enemies.filter(e => !e.dead && e.spawnT <= 0 && !used.has(e.netId || e)).sort((a,b) => dist(from.x,from.y,a.x,a.y)-dist(from.x,from.y,b.x,b.y))[0];
+            if (!target || dist(from.x,from.y,target.x,target.y) > (k ? 300 : 440)) break;
+            used.add(target.netId || target);
+            spark(target.x,target.y,18,'#ffe94a',360); ring(target.x,target.y,70,'#ffe94a',0.35,4);
+            hurtEnemy(target, 82 + 18 * P.tier, { ignoreArmor:true });
+            if (!target.boss) target.stun = Math.max(target.stun || 0, 0.45);
+            from = target;
+          }
+          ring(P.x,P.y,90,'#ffe94a',0.4,4);
+        }
+        else if (c === 7) {
+          const radius = 260 + (P.path === 'A' ? P.tier * 35 : 0);
+          for (const e of enemies) if (!e.dead && e.spawnT <= 0 && dist(P.x,P.y,e.x,e.y) < radius + e.r) {
+            hurtEnemy(e, 42 + 12 * P.tier, { ignoreArmor:true });
+            e.corrode = Math.min(8, (e.corrode || 0) + 3 + (P.path === 'B' ? P.tier : 0));
+            e.corrodeT = 3.5; e.burn = Math.max(e.burn || 0, 2.5 + P.tier);
+            addGlow(e.x,e.y,e.r*2,'#7dff6a',0.9); bubbles(e.x,e.y,7,e.r);
+          }
+          boomFx(P.x,P.y,radius,'#7dff6a','#b6ff3b'); shake(9);
+        }
+        else if (c === 8) {
+          const radius = 380 + (P.path === 'A' ? P.tier * 45 : 0);
+          for (const e of enemies) if (!e.dead && e.spawnT <= 0 && dist(P.x,P.y,e.x,e.y) < radius + e.r) {
+            if (e.boss) { e.vuln = Math.max(e.vuln || 0, 2.5 + P.tier); e.slow = Math.max(e.slow || 0, 3); }
+            else { e.stun = Math.max(e.stun || 0, 2 + P.tier * 0.5); e.slow = Math.max(e.slow || 0, 4); }
+            ring(e.x,e.y,e.r+35,'#c46bff',0.5,3);
+          }
+          ring(P.x,P.y,radius,'#c46bff',0.7,6); addGlow(P.x,P.y,radius,'#c46bff',0.55);
+        }
+        else if (c === 9) {
+          const radius = 250 + (P.path === 'A' ? P.tier * 35 : 0);
+          for (const e of enemies) if (!e.dead && e.spawnT <= 0) {
+            const d = dist(P.x,P.y,e.x,e.y);
+            if (d < radius + e.r) {
+              hurtEnemy(e, 115 + 25 * P.tier, { ignoreArmor:true });
+              const a = Math.atan2(e.y-P.y,e.x-P.x), force = e.boss ? 180 : 650;
+              e.vx += Math.cos(a)*force; e.vy += Math.sin(a)*force;
+              if (!e.boss) e.stun = Math.max(e.stun || 0,0.35);
+            }
+          }
+          boomFx(P.x,P.y,radius,'#ff8a3b','#ffe94a'); shake(18); ring(P.x,P.y,radius,'#ff8a3b',0.6,7);
+        }
+        const reduction = c === 4 && P.path === 'A' ? 3 * P.tier : c >= 5 && P.path === 'A' ? P.tier * 1.5 : 0;
+        P.fcd = Math.max(2, P.fmax - reduction); AudioSys.sfx('upgrade');
       }
       function updateChar() {
         const save = () => { try { localStorage.setItem('ar_cfg', JSON.stringify(cfg)); } catch (e) { } };
         if (pressed.Escape) { charMenu = false; pendingStart = null; save(); return; }
         if (pressed.Enter || (pendingStart && mouse.lp && mouse.y > 600 && mouse.y < 660 && mouse.x > W / 2 - 200 && mouse.x < W / 2 + 200)) { save(); charMenu = false; if (pendingStart) { infinite = pendingStart === 'inf'; pendingStart = null; newRun(); startTut(); } return; }
         if (pressed.KeyC && !pendingStart) { charMenu = false; save(); return; }
-        if (pressed.ArrowLeft || pressed.KeyA) { cfg.char = (cfg.char + CHARS.length - 1) % CHARS.length; AudioSys.sfx('ui'); } if (pressed.ArrowRight || pressed.KeyD) { cfg.char = (cfg.char + 1) % CHARS.length; AudioSys.sfx('ui'); }
-        for (let i = 0; i < CHARS.length; i++) if (pressed['Digit' + (i + 1)] || (mouse.lp && mouse.x > 40 + i * 240 && mouse.x < 260 + i * 240 && mouse.y > 140 && mouse.y < 580)) { cfg.char = i; AudioSys.sfx('upgrade'); }
+        if (pressed.ArrowLeft || pressed.KeyA) { cfg.char = (cfg.char + CHARS.length - 1) % CHARS.length; AudioSys.sfx('ui'); }
+        if (pressed.ArrowRight || pressed.KeyD) { cfg.char = (cfg.char + 1) % CHARS.length; AudioSys.sfx('ui'); }
+        for (let i = 0; i < CHARS.length; i++) {
+          const col = i % 5, row = Math.floor(i / 5);
+          const x = 40 + col * 240, y = 145 + row * 245;
+          const key = i < 9 ? 'Digit' + (i + 1) : 'Digit0';
+          if (pressed[key] || (mouse.lp && mouse.x >= x && mouse.x <= x + 220 && mouse.y >= y && mouse.y <= y + 230)) {
+            cfg.char = i; AudioSys.sfx('upgrade');
+          }
+        }
       }
       function drawChar() {
-        dim(0.93); txt(pendingStart ? 'ELIGE A TU BUZO PARA ESTA INMERSIÓN' : 'TU BUZO', W / 2, 80, 34, '#8fd8ff', 'center', 14); txt('Clic, 1-5 o ← → para elegir · [F] es su habilidad especial · cada 5 niveles mejoras tu clase (eliges UNA ruta)', W / 2, 112, 14, '#cfe0f0', 'center');
+        dim(0.94);
+        txt(pendingStart ? 'ELIGE A TU BUZO PARA ESTA INMERSIÓN' : 'TU BUZO', W / 2, 58, 32, '#8fd8ff', 'center', 12);
+        txt('10 PERSONAJES · Clic o 1-9 / 0 · ← → para recorrer · F usa la habilidad · niveles 5/10/20 mejoran tu ruta',
+          W / 2, 88, 13, '#cfe0f0', 'center');
         CHARS.forEach((c, i) => {
-          const x = 40 + i * 240, on = cfg.char === i, y = 140, pu = on ? 0.5 + 0.5 * Math.sin(time * 4) : 0;
-          ctx.fillStyle = 'rgba(8,24,40,.94)'; ctx.fillRect(x, y, 220, 440); const g = ctx.createLinearGradient(0, y, 0, y + 190); g.addColorStop(0, c.col + (on ? '55' : '22')); g.addColorStop(1, 'rgba(0,0,0,0)'); ctx.fillStyle = g; ctx.fillRect(x, y, 220, 190);
-          ctx.strokeStyle = on ? '#fff' : c.col; ctx.lineWidth = on ? 3 + pu * 2 : 2; ctx.strokeRect(x, y, 220, 440);
-          ctx.save(); ctx.translate(x + 110, y + 105); ctx.shadowColor = c.col; ctx.shadowBlur = on ? 30 : 12; drawDiver(0, 20, 2.2 + (on ? 0.15 * pu : 0)); ctx.shadowBlur = 0; ctx.strokeStyle = c.col; ctx.fillStyle = c.col; ctx.lineWidth = 4;
-          if (i === 0) { ctx.beginPath(); ctx.arc(30, -10, 26, -1, 1); ctx.stroke(); } else if (i === 1) txt('$', 36, -2, 34, c.col, 'center', 8); else if (i === 2) { ctx.beginPath(); for (let k = 0; k < 8; k++) { const a = k * TAU / 8 + time; ctx.lineTo(36 + Math.cos(a) * (k % 2 ? 11 : 16), -4 + Math.sin(a) * (k % 2 ? 11 : 16)); } ctx.closePath(); ctx.stroke(); } else if (i === 3) { ctx.strokeRect(22, -26, 28, 32); } else { ctx.fillRect(30, -24, 12, 32); ctx.fillRect(20, -14, 32, 12); }
-          ctx.restore();
-          wrap(c.n, 196, 20).forEach((l, k) => txt(l, x + 110, y + 232 + k * 24, 20, c.col, 'center', 8)); const ny = wrap(c.n, 196, 20).length;
-          wrap(c.pass, 196, 12).forEach((l, k) => txt(l, x + 110, y + 232 + ny * 24 + 8 + k * 16, 12, '#e6f2ff', 'center'));
-          txt('ESPECIAL [F] · ' + c.fn, x + 110, y + 330, 12, '#ffe94a', 'center'); wrap(c.f, 196, 11).forEach((l, k) => txt(l, x + 110, y + 350 + k * 15, 11, '#cfe0f0', 'center'));
-          txt('RUTAS: ' + CPATH[i][0].n + ' / ' + CPATH[i][1].n, x + 110, y + 424, 9, c.col, 'center'); if (on) txt('✔ ELEGIDO', x + 110, y + 408, 13, '#7dff6a', 'center');
+          const x = 40 + (i % 5) * 240, y = 112 + Math.floor(i / 5) * 255;
+          const on = cfg.char === i, pulse = on ? 0.5 + 0.5 * Math.sin(time * 4) : 0;
+          ctx.fillStyle = 'rgba(8,24,40,.96)'; ctx.fillRect(x,y,220,240);
+          const g = ctx.createLinearGradient(0,y,0,y+100);
+          g.addColorStop(0,c.col+(on?'44':'18')); g.addColorStop(1,'rgba(0,0,0,0)');
+          ctx.fillStyle=g; ctx.fillRect(x,y,220,100);
+          ctx.strokeStyle=on?'#fff':c.col; ctx.lineWidth=on?3+pulse*2:1.5; ctx.strokeRect(x,y,220,240);
+          ctx.save(); ctx.translate(x+110,y+62); ctx.shadowColor=c.col; ctx.shadowBlur=on?22:8;
+          drawDiver(0,10,1.25); ctx.restore();
+          txt((i+1===10?'0':String(i+1))+' · '+c.n,x+110,y+119,14,c.col,'center',5);
+          wrap(c.pass,196,10).forEach((l,k)=>txt(l,x+110,y+140+k*13,10,'#e6f2ff','center'));
+          txt('F · '+c.fn+' ('+c.cd+'s)',x+110,y+177,10,'#ffe94a','center');
+          wrap(c.f,196,9).forEach((l,k)=>txt(l,x+110,y+192+k*11,9,'#cfe0f0','center'));
+          if(on) txt('✔ ELEGIDO',x+110,y+230,10,'#7dff6a','center');
         });
-        if (pendingStart) { const on = Math.floor(time * 3) % 2 === 0; ctx.fillStyle = on ? '#3bd98a' : '#2aa86a'; ctx.fillRect(W / 2 - 200, 600, 400, 56); ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.strokeRect(W / 2 - 200, 600, 400, 56); txt('COMENZAR INMERSIÓN  [ENTER]', W / 2, 636, 20, '#04120a', 'center'); txt('Esc: volver', W / 2, 682, 12, '#8fb8d8', 'center'); }
+        if (pendingStart) {
+          const on=Math.floor(time*3)%2===0;
+          ctx.fillStyle=on?'#3bd98a':'#2aa86a'; ctx.fillRect(W/2-200,635,400,48);
+          ctx.strokeStyle='#fff'; ctx.lineWidth=2; ctx.strokeRect(W/2-200,635,400,48);
+          txt('COMENZAR INMERSIÓN [ENTER]',W/2,666,17,'#04120a','center');
+          txt('Esc: volver',W/2,704,11,'#8fb8d8','center');
+        }
       }
 
       const CPATH = [
@@ -1937,7 +2055,12 @@
         [{ n: 'BOUNTY PESADO', d: 'La presa paga mucho más: +60% de órganos y XP por nivel.' }, { n: 'CAZA MÚLTIPLE', d: 'Marcas 1 presa más por nivel, pero cada una paga un 40% menos.' }],
         [{ n: 'MÁS PECES', d: '+2 peces mecánicos por nivel de clase.' }, { n: 'PECES GRANDES', d: 'Peces más grandes y fuertes (+50% de daño) y duran 3 s más por nivel.' }],
         [{ n: 'BASTIÓN', d: 'Te mueves un 12% menos por nivel, pero recibes un 10% menos de daño por nivel.' }, { n: 'INVENCIBLE', d: 'F te hace invulnerable 2 s (+0,5 s por nivel); después recibes el doble de daño 5 s.' }],
-        [{ n: 'CURA POTENTE', d: 'F cura un 15% más por nivel y se recarga 3 s antes.' }, { n: 'PROTECTOR', d: 'F además te da +1 escudo y 1 s de invulnerabilidad por nivel.' }]
+        [{ n: 'CURA POTENTE', d: 'F cura un 15% más por nivel y se recarga 3 s antes.' }, { n: 'PROTECTOR', d: 'F además te da +1 escudo y 1 s de invulnerabilidad por nivel.' }],
+        [{ n: 'ECO LOCALIZADOR', d: 'El sonar dura más y marca a los enemigos durante más tiempo.' }, { n: 'CARTÓGRAFO', d: 'El sonar también revela y debilita a los enemigos cercanos.' }],
+        [{ n: 'SOBRECARGA', d: 'La cadena alcanza más objetivos y hace más daño.' }, { n: 'ARCO LARGO', d: 'Los saltos eléctricos llegan más lejos y aturden más.' }],
+        [{ n: 'ÁCIDO CONCENTRADO', d: 'La toxina dura más y corroe con mayor intensidad.' }, { n: 'NUBE TÓXICA', d: 'La explosión cubre un radio mayor.' }],
+        [{ n: 'DILATACIÓN', d: 'El control temporal dura más.' }, { n: 'FRACTURA', d: 'Los jefes vulnerables reciben el efecto durante más tiempo.' }],
+        [{ n: 'TERREMOTO', d: 'La onda sísmica alcanza más lejos.' }, { n: 'IMPACTO BRUTAL', d: 'El sismo inflige más daño y empuja con más fuerza.' }]
       ];
       function updateClass() {
         for (let i = 0; i < 2; i++) if (pressed['Digit' + (i + 1)] || (mouse.lp && mouse.x > 200 + i * 450 && mouse.x < 620 + i * 450 && mouse.y > 200 && mouse.y < 560)) {
@@ -1967,7 +2090,8 @@
         if (rs === 'shop') shopLogic();
         else if (rs === 'intro') { introT -= dt; if (introT <= 0) { rs = 'fight'; spawnWave(); } }
         else if (rs === 'fight') {
-          if (enemies.length === 0) {
+          if (!enemies.some(e => !e.dead)) {
+            enemies = [];
             if (waveQueue.length) spawnWave();
             else {
               rs = 'cleared'; cell.cleared = true; organs = Math.round((organs + (2 + (cell.type === 'boss' ? 5 : 0)) * (1 + 0.5 * style / 100)) * (1 + P.st.econ)); addStyle(20, 'SALA');
@@ -3795,9 +3919,15 @@ maxRank = Math.max(maxRank, sr()); ambT -= dt; if (ambT <= 0) { ambT = rand(9, 2
             if (state !== 'playing') return;
             const target = enemies.find(e => e.netId === data.netId && !e.dead);
             if (target && Number.isFinite(Number(data.damage))) {
-              const dealt = hurtEnemy(target, Math.min(100000, Math.max(0, Number(data.damage))), { ...(data.options || {}), fromMP: true });
+              const dealt = hurtEnemy(target, Math.min(100000, Math.max(0, Number(data.damage))), { ...(data.options || {}), fromMP: true, mpLifesteal: Number(data.options && data.options.mpLifesteal) || 0 });
               if (dealt > 0) {
-                try { MP.socket.send(JSON.stringify({ type: 'enemy-damage', netId: target.netId, damage: dealt, hp: Math.max(0, target.hp), dead: !!target.dead, x: target.x, y: target.y, roomKey: mpRoomKey() })); } catch {}
+                const attackerHeal = dealt * clamp(Number(data.options && data.options.mpLifesteal) || 0, 0, 1);
+                try { MP.socket.send(JSON.stringify({
+                  type: 'enemy-damage', netId: target.netId, damage: dealt,
+                  hp: Math.max(0, target.hp), dead: !!target.dead,
+                  x: target.x, y: target.y, attackerId: data.playerId || data.attackerId || null,
+                  heal: attackerHeal, roomKey: mpRoomKey()
+                })); } catch {}
               }
             }
             return;
@@ -3821,6 +3951,10 @@ maxRank = Math.max(maxRank, sr()); ambT -= dt; if (ambT <= 0) { ambT = rand(9, 2
                 addGlow(hitX, hitY, target.r * 2.2, col, 0.65);
                 shake(target.type === 'tank' ? 3 : 1.5);
                 AudioSys.sfx('hit');
+              }
+              if (data.attackerId === MP.id && Number(data.heal) > 0 && !P.dead) {
+                const healed = Math.min(P.maxHp - P.hp, Number(data.heal));
+                if (healed > 0) { P.hp += healed; floatText('+' + Math.round(healed), P.x, P.y - 28, '#c46bff', 13); }
               }
               if (data.dead && !target.dead) {
                 target.dead = true;
