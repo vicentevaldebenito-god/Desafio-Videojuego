@@ -1876,15 +1876,14 @@
         P.hist.push({ id: u.id, name: u.name, col: u.col, stat: STATS.find(q => q.id === u.id) || null, rar: u.rar || 0 });
         AudioSys.sfx('upgrade');
         P.hp = Math.min(P.maxHp, P.hp + Math.round(P.maxHp * (0.1 + P.st.heal)));
-        if (MP && MP.connected && MP.isHost) {
-          MP.upgradeSeq++;
-          MP.lastUpgradeChoice = {
-            seq: MP.upgradeSeq, id: u.id, name: u.name, col: u.col,
-            rar: u.rar || 0, statKey: u.statKey || null,
-            statValue: Number.isFinite(u.statValue) ? u.statValue : null
-          };
+        if (MP && MP.connected && !MP.isHost) {
+          // Cada invitado conserva su elección y espera a que el anfitrión continúe.
+          MP.localUpgradeDone = true;
+          cards = [];
+          state = 'upgrade';
+        } else {
+          state = 'playing';
         }
-        state = 'playing';
       }
       function endRun(win) {
         meta.runs++; saveMeta();
@@ -2063,7 +2062,7 @@
         cards.forEach((c, i) => { const x = x0 + i * (cw + gap); if (mouse.x > x && mouse.x < x + cw && mouse.y > 150 && mouse.y < 570) hover = i; });
         cards.hover = hover;
         if (stateT > 0.25) {
-          if (MP.connected && !MP.isHost) return;
+          if (MP.connected && !MP.isHost && MP.localUpgradeDone) return;
           if (pressed.KeyR && P.rr > 0) { P.rr--; openUpgrades(); return; }
           if (pressed.Digit1 && cards[0]) chooseUpgrade(cards[0]);
           else if (pressed.Digit2 && cards[1]) chooseUpgrade(cards[1]);
@@ -2115,7 +2114,7 @@
 
       function update(dt) {
         // El invitado queda completamente congelado hasta que el anfitrión reanude.
-        if (MP && MP.connected && !MP.isHost && MP.sharedLocked) return;
+        if (MP && MP.connected && !MP.isHost && MP.sharedLocked && state !== 'upgrade') return;
         if (pressed.Tab && P && !P.dead && (state === 'playing' || (state === 'inv' && !invPick))) { state = state === 'inv' ? 'playing' : 'inv'; AudioSys.sfx('invopen'); }
         time += dt;
         if (pressed.KeyM) AudioSys.toggleMute();
@@ -2266,7 +2265,10 @@
       }
 
       function drawEnemy(e) {
-        const col = ET[e.type].color;
+        // Un enemigo puede morir durante la actualización de proyectiles/efectos.
+        // No intentamos dibujar entidades ya eliminadas.
+        if (!e || e.dead) return;
+        const col = (ET[e.type] && ET[e.type].color) || '#ff4fd8';
         if (e.spawnT > 0) {
           const k = 1 - e.spawnT / e.spawnMax;
           ctx.save(); ctx.translate(e.x, e.y); ctx.globalCompositeOperation = 'lighter'; ctx.strokeStyle = col; ctx.lineWidth = 3; ctx.globalAlpha = 0.3 + 0.7 * k;
@@ -3036,7 +3038,9 @@ for (const remote of MP.remotePlayers.values()) {
         sharedLocked: false,
         upgradeSeq: 0,
         lastAppliedUpgradeSeq: 0,
-        lastUpgradeChoice: null
+        lastUpgradeChoice: null,
+        localUpgradeOpen: false,
+        localUpgradeDone: false
       };
 
       let mpOpen = false;
@@ -3459,18 +3463,29 @@ for (const remote of MP.remotePlayers.values()) {
         if (Number.isFinite(data.cpend)) cpend = data.cpend;
         if (Number.isFinite(data.kills)) kills = data.kills;
 
-        // El estado de juego y las cartas de mejora los decide el anfitrión.
+        // El anfitrión sincroniza cuándo se abre/cierra la selección,
+        // pero cada jugador genera y aplica sus propias cartas.
         if (typeof data.gameState === 'string' && ['playing', 'paused', 'upgrade', 'shop', 'class', 'lock', 'dive', 'gameover', 'victory'].includes(data.gameState)) {
-          state = data.gameState;
+          const incomingState = data.gameState;
+          if (incomingState === 'upgrade' && !MP.isHost) {
+            if (!MP.localUpgradeOpen) {
+              MP.localUpgradeOpen = true;
+              MP.localUpgradeDone = false;
+              cards = [];
+              openUpgrades();
+            }
+            state = 'upgrade';
+          } else {
+            state = incomingState;
+            if (incomingState !== 'upgrade') {
+              MP.localUpgradeOpen = false;
+              MP.localUpgradeDone = false;
+              if (incomingState !== 'upgrade') cards = [];
+            }
+          }
           MP.sharedLocked = state === 'paused' || state === 'upgrade' || state === 'shop' || state === 'class' || state === 'lock';
         }
-        if (state === 'upgrade' && Array.isArray(data.upgradeCards)) cards = data.upgradeCards.map(c => ({ ...c }));
-        else if (state !== 'upgrade') cards = [];
-
-        if (data.upgradeChoice && Number(data.upgradeChoice.seq) > MP.lastAppliedUpgradeSeq) {
-          MP.lastAppliedUpgradeSeq = Number(data.upgradeChoice.seq);
-          mpApplyUpgradeChoice(data.upgradeChoice);
-        }
+        if (MP.isHost && state === 'upgrade' && Array.isArray(data.upgradeCards)) cards = data.upgradeCards.map(c => ({ ...c }));
         mpWorldRevision = Number(data.revision) || mpWorldRevision;
       }
 
@@ -3489,9 +3504,7 @@ for (const remote of MP.remotePlayers.values()) {
         const room = { key: mpRoomKey(), floorN, roomN, cellKey: cell ? cell.x + ',' + cell.y : null, dun: mpClone(dun), rs, introT, doorOpen, waveQueue: mpClone(waveQueue), obstacles: mpClone(obstacles), lights: mpClone(lights), feats: mpClone(feats), secret: mpClone(secret), chest: mpClone(chest), exitPortal: mpClone(exitPortal), sidePortal: mpClone(sidePortal) };
         try {
           const upgradeCards = state === 'upgrade' ? cards.map(c => ({ id: c.id, name: c.name, desc: c.desc, col: c.col, icon: c.icon, art: c.art, rar: c.rar || 0, max: c.max || 99, statKey: c.statKey || null, statValue: Number.isFinite(c.statValue) ? c.statValue : null })) : null;
-          MP.socket.send(JSON.stringify({ type: 'world-state', revision: ++mpWorldRevision, gameState: state, upgradeCards, upgradeChoice: MP.lastUpgradeChoice, room, enemies: snapshot, ebullets: mpClone(ebullets), pickups: mpClone(pickups), orbs: mpClone(orbs), xp, level, xpNeed, organs, pend, cpend, kills }));
-          // La elección se envía una sola vez para no repetirla a nuevos invitados.
-          MP.lastUpgradeChoice = null;
+          MP.socket.send(JSON.stringify({ type: 'world-state', revision: ++mpWorldRevision, gameState: state, upgradeCards, room, enemies: snapshot, ebullets: mpClone(ebullets), pickups: mpClone(pickups), orbs: mpClone(orbs), xp, level, xpNeed, organs, pend, cpend, kills }));
         } catch (error) {
           console.warn('[MP] Error sincronizando enemigos:', error);
         }
