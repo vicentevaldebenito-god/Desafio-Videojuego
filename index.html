@@ -3888,7 +3888,7 @@ for (const remote of MP.remotePlayers.values()) {
         if (Array.isArray(data.ebullets)) ebullets = mpClone(data.ebullets) || [];
         if (Array.isArray(data.pickups)) {
           const previousPickups = new Map(pickups.map(p => [p.mpId, p]));
-          pickups = data.pickups.map(incoming => {
+          pickups = data.pickups.filter(incoming => !incoming.got).map(incoming => {
             const old = previousPickups.get(incoming.mpId);
             if (!old) return incoming;
             Object.assign(old, incoming);
