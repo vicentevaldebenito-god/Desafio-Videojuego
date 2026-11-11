@@ -2888,6 +2888,11 @@ for (const remote of MP.remotePlayers.values()) {
       function drawUpgrade() {
         dim(0.72);
         const th = THEMES[floorN - 1];
+        if (MP && MP.connected && !MP.isHost && MP.localUpgradeDone) {
+          txt('MEJORA SELECCIONADA', W / 2, H / 2 - 18, 30, '#7dff6a', 'center', 12);
+          txt('ESPERANDO A QUE EL ANFITRIÓN TERMINE...', W / 2, H / 2 + 24, 15, '#8fb8d8', 'center');
+          return;
+        }
         txt('MUTACIÓN ABISAL', W / 2, 90, 44, th.accent, 'center', 16);
         txt('Elige una mejora · clic o teclas 1 / 2 / 3', W / 2, 124, 15, '#8fb8d8', 'center'); if (P.rr > 0) txt('[R] REROLL x' + P.rr, W / 2, 144, 14, '#c46bff', 'center'); txt('NIVEL ' + level, W / 2, 62, 16, '#7dff6a', 'center');
         const cw = 330, gap = 40, x0 = (W - (cw * 3 + gap * 2)) / 2;
