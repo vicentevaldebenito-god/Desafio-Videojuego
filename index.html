@@ -1522,7 +1522,7 @@
       function goDoor(o) { if (MP && MP.connected && !MP.isHost) return; cell = o.n; cell.visited = true; roomN = Math.max(1, cell.d); startRoom(); const m = 90; if (o.d === 'u') { P.x = W / 2; P.y = H - WALL - m; } else if (o.d === 'd') { P.x = W / 2; P.y = WALL + m; } else if (o.d === 'l') { P.x = W - WALL - m; P.y = H / 2; } else { P.x = WALL + m; P.y = H / 2; } }
       function revealSecrets() { for (const d of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const n = dun.cells[(cell.x + d[0]) + ',' + (cell.y + d[1])]; if (n && n.type === 'secret' && !n.rev) { n.rev = true; floatText('¡UNA GRIETA SE ABRE!', W / 2, H / 2, '#2ee6ff', 18); AudioSys.sfx('rankup'); } } }
       function nextSector() { if (MP && MP.connected && !MP.isHost) return; floorN++; if (floorN > FLOORS) { if (infinite) { floorN = 1; loop++; } else { floorN = FLOORS; endRun(true); return; } } roomN = 1; genDungeon(); startRoom(); }
-      function addXP(n) { xp += n * P.st.xp * (1 + 0.2 * style / 100) * (1 + 0.5 * (floorN - 1) + loop) * (1 + 0.2 * cfg.pres) * 2; while (xp >= xpNeed) { xp -= xpNeed; level++; xpNeed = Math.round(xpNeed * 1.25); pend++; if (level % 5 === 0) cpend++; } }
+      function addXP(n) { if (MP && MP.connected && !MP.isHost) { if (MP.socket && MP.socket.readyState === WebSocket.OPEN) MP.socket.send(JSON.stringify({ type: 'xp-request', amount: Math.max(0, Number(n) || 0) })); return; } xp += n * P.st.xp * (1 + 0.2 * style / 100) * (1 + 0.5 * (floorN - 1) + loop) * (1 + 0.2 * cfg.pres) * 2; while (xp >= xpNeed) { xp -= xpNeed; level++; xpNeed = Math.round(xpNeed * 1.25); pend++; if (level % 5 === 0) cpend++; } }
       const STATS = [
         { id: 's_dmg', k: 'dmg', name: 'DAÑO BRUTAL', label: 'Daño', base: 0.12, art: 'implo', icon: 'burst' },
         { id: 's_rate', k: 'rate', name: 'CADENCIA FRENÉTICA', label: 'Cadencia', base: 0.10, art: 'adren', icon: 'pulse' },
@@ -3256,6 +3256,11 @@ for (const remote of MP.remotePlayers.values()) {
           if (data.type === 'enemy-hit' && MP.isHost) {
             const target = enemies.find(e => e.netId === data.netId && !e.dead);
             if (target && Number.isFinite(Number(data.damage))) hurtEnemy(target, Math.min(100000, Math.max(0, Number(data.damage))), { ...(data.options || {}), fromMP: true });
+            return;
+          }
+          if (data.type === 'xp-request' && MP.isHost) {
+            const amount = Math.min(10000, Math.max(0, Number(data.amount) || 0));
+            if (amount > 0) addXP(amount);
             return;
           }
 
