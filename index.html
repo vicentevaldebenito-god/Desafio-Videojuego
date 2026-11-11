@@ -1543,7 +1543,7 @@
               decel(e, dt, 1800); e.despTimer += dt;
               if (target === P) { const a = Math.atan2(e.y-target.y,e.x-target.x); moveEntity(P, Math.cos(a)*230*dt, Math.sin(a)*230*dt, P.r); }
               else mpSendTargetHit(target, 0, toP + Math.PI, Math.cos(toP+Math.PI)*230, Math.sin(toP+Math.PI)*230);
-              if (e.despTimer >= 4) { const n=34, off=rand(0,TAU); for(let i=0;i<n;i++) enemyShoot(e,off+i*TAU/n,260,12,false); e.state='desp_lights'; e.despTimer=0; e.despLights=Array.from({length:5},(_,i)=>({x:W/2+Math.cos(i*TAU/5)*330,y:H/2+Math.sin(i*TAU/5)*230,power:0.35+Math.random()*0.35})); e.despLights[ randi(0,4) ].power=1.35; inkT=10; banner={t:3,max:3,l1:'ENCUENTRA LA LUZ VERDADERA',l2:'ACÉRCATE A LA MÁS BRILLANTE Y PULSA R'}; }
+              if (e.despTimer >= 4) { if (target === P && dist(P.x,P.y,e.x,e.y) < e.r + P.r + 115) hurtEnemyTargetPlayer(target,28,Math.atan2(P.y-e.y,P.x-e.x)); const n=34, off=rand(0,TAU); for(let i=0;i<n;i++) enemyShoot(e,off+i*TAU/n,260,12,false); e.state='desp_lights'; e.despTimer=0; e.despLights=Array.from({length:5},(_,i)=>({x:W/2+Math.cos(i*TAU/5)*330,y:H/2+Math.sin(i*TAU/5)*230,power:0.35+Math.random()*0.35})); e.despLights[ randi(0,4) ].power=1.35; inkT=10; banner={t:3,max:3,l1:'ENCUENTRA LA LUZ VERDADERA',l2:'ACÉRCATE A LA MÁS BRILLANTE Y PULSA R'}; }
             } else if (e.state === 'desp_lights') {
               decel(e, dt, 3000); inkT=Math.max(inkT,0.15);
               const correct=e.despLights.reduce((a,b)=>b.power>a.power?b:a,e.despLights[0]);
