@@ -993,6 +993,7 @@
         }
         const d = dmg * m;
         if (o.attackerId) e.lastHitBy = o.attackerId;
+        else if (MP && MP.connected && MP.isHost) e.lastHitBy = MP.id;
         const steal = Number.isFinite(o.mpLifesteal) ? o.mpLifesteal : P.st.ls;
         if (steal > 0 && !P.dead && d > 0 && !(MP && MP.connected && MP.isHost && o.fromMP)) {
           const healed = Math.min(P.maxHp - P.hp, d * Math.max(0, steal));
@@ -4192,7 +4193,7 @@ maxRank = Math.max(maxRank, sr()); ambT -= dt; if (ambT <= 0) { ambT = rand(9, 2
         't','state','st','cd','side','sideT','pull','pullT','dead','boss','mini',
         'score','wanderT','wA','hitDone','cA','n','af','orbit','orbitT','phase',
         'shield','vuln','vulnT','parryT','dodgeT','dodgeA','reflect','ecd',
-        'vis','cam','amT','amInit','segT'
+        'vis','cam','amT','amInit','segT','bounty'
       ];
       let mpWorldTimer = 0;
       let mpWorldRevision = 0;
