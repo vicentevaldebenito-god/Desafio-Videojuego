@@ -549,11 +549,14 @@
         let b = 5 + ri * 2 + ri * ri * 0.9;
         const mpCount = MP && MP.connected ? clamp(Number(MP.players) || 1, 1, 4) : 1;
         const enemyMultiplier = [1, 2, 2.5, 3][mpCount - 1];
-        b *= enemyMultiplier;
         const list = [];
         const pool = loop === 0 && floorN === 1 ? ['stalker', 'stalker', 'drone'] : loop === 0 && floorN === 2 ? ['stalker', 'drone', 'dodger', 'dodger', 'tank'] : ['stalker', 'drone', 'dodger', 'tank', 'spitter', 'sniper', 'guardian'].concat(loop >= 1 ? ['bomber', 'phantom'] : []);
         while (b > 0 && list.length < 500) { let t = pool[Math.floor(Math.random() * pool.length)]; if (b < ET[t].cost) t = 'stalker'; list.push(t); b -= ET[t].cost; }
         if (loop >= 1) { const c = loop >= 3 ? 2 : (Math.random() < 0.55 ? 1 : 0); for (let i = 0; i < c; i++) list.push('mini'); }
+        // Multiplicador exacto de cantidad: 2, 2.5 o 3 veces la oleada base.
+        const baseWave = list.slice();
+        const targetCount = Math.round(baseWave.length * enemyMultiplier);
+        for (let i = baseWave.length; i < targetCount; i++) list.push(baseWave[i % baseWave.length]);
         const out = [], per = Math.max(8, Math.ceil(list.length / 3)); for (let i = 0; i < list.length; i += per) out.push(list.slice(i, i + per));
         return out;
       }
