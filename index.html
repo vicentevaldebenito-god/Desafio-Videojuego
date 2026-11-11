@@ -2958,7 +2958,7 @@ maxRank = Math.max(maxRank, sr()); ambT -= dt; if (ambT <= 0) { ambT = rand(9, 2
          14. RENDER: ENTIDADES
          --------------------------------------------------------------------- */
       function drawPlayer(player = P) {
-        const p = player, th = THEMES[floorN - 1];
+        const p = player, th = THEMES[floorN - 1] || THEMES[(Math.max(1, floorN) - 1) % THEMES.length] || THEMES[0];
         ctx.save(); ctx.translate(p.x, p.y);
         ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.beginPath(); ctx.ellipse(3, 6, p.r + 2, p.r, 0, 0, TAU); ctx.fill();
         ctx.rotate(p.angle);
@@ -3004,7 +3004,7 @@ maxRank = Math.max(maxRank, sr()); ambT -= dt; if (ambT <= 0) { ambT = rand(9, 2
         }
         if (floorN === 4 && !e.boss && P.revealT <= 0 && dist(P.x,P.y,e.x,e.y) > 235 && !flares.some(f=>dist(f.x,f.y,e.x,e.y)<f.r*1.5)) return;
         const fl = e.flash > 0;
-        if(e.boss && bfl()===4){const echo={...e,x:e.x,y:e.y,r:Math.max(19,e.r*.72),angle:e.face,weapon:P.weapon||0,kick:e.state==='mirror_shoot'?Math.sin(e.t*35)*.8:0,cd:[e.mirrorFireCd||0,e.mirrorFireCd||0],shield:0,iframes:e.dodgeT||0,dashT:e.state==='mirror_dash'?.2:0,flash:e.flash,slots:P.slots||[0,1],sec:[0,0],char:P.char};drawPlayer(echo);ctx.save();ctx.globalCompositeOperation='lighter';ctx.strokeStyle=e.parryT>0?'#e9fbff':'rgba(120,220,255,.32)';ctx.lineWidth=e.parryT>0?4:2;ctx.beginPath();ctx.arc(e.x,e.y,e.r*1.42+Math.sin(e.t*7)*3,0,TAU);ctx.stroke();ctx.restore();if(e.parryT>0)addGlow(e.x,e.y,95,'#b9f4ff',.7);return;}
+        if(e.boss && bfl()===4){const echo={...e,x:e.x,y:e.y,r:Math.max(19,e.r*.72),angle:Number.isFinite(e.face)?e.face:0,weapon:P?.weapon||0,kick:e.state==='mirror_shoot'?Math.sin(e.t*35)*.8:0,cd:[e.mirrorFireCd||0,e.mirrorFireCd||0],shield:0,iframes:e.dodgeT||0,dashT:e.state==='mirror_dash'?.2:0,flash:e.flash,slots:P?.slots||[0,1],sec:[0,0],char:P?.char};drawPlayer(echo);ctx.save();ctx.globalCompositeOperation='lighter';ctx.strokeStyle=e.parryT>0?'#e9fbff':'rgba(120,220,255,.32)';ctx.lineWidth=e.parryT>0?4:2;ctx.beginPath();ctx.arc(e.x,e.y,e.r*1.42+Math.sin(e.t*7)*3,0,TAU);ctx.stroke();ctx.restore();if(e.parryT>0)addGlow(e.x,e.y,95,'#b9f4ff',.7);return;}
         ctx.save(); ctx.translate(e.x, e.y);
         ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.beginPath(); ctx.ellipse(3, 6, e.r, e.r * 0.8, 0, 0, TAU); ctx.fill();
         if (false) {
