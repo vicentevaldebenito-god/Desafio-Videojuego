@@ -805,16 +805,12 @@
         fade = 1;
         if (amalFinalRoom && !cell.cleared) {
           obstacles = [
-            { x: 360, y: WALL + 178, w: 190, h: 38 },
-            { x: 730, y: WALL + 178, w: 190, h: 38 },
-            { x: 360, y: WALL + 178, w: 38, h: H - WALL - 178 },
-            { x: 882, y: WALL + 178, w: 38, h: H - WALL - 178 },
-            { x: WALL + 8, y: WALL + 8, w: 38, h: 170 },
-            { x: W - WALL - 46, y: WALL + 8, w: 38, h: 170 }
+            { x: 300, y: WALL + 150, w: 42, h: H - WALL - 150 },
+            { x: W - 342, y: WALL + 150, w: 42, h: H - WALL - 150 }
           ];
           P.x = W / 2; P.y = H - WALL - 54; P.iframes = 1.5;
           chest = { x: W / 2, y: WALL + 92, open: false, amal: true };
-          amalEncounter = { phase: 'corridor', timer: 0, rocks: [], hits: 0, survive: 88, boss: null, eyePulse: 0, formChanges: 0, rockReady: false };
+          amalEncounter = { phase: 'corridor', timer: 0, rocks: [], hits: 0, survive: 150, boss: null, eyePulse: 0, formChanges: 0, rockReady: false, nextForm: 13, eyeClose: 0, materialize: 0, rockCycle: 0 };
           rs = 'fight'; introDark = 0;
           banner = { t: 2, max: 2, l1: 'EL UMBRAL', l2: '' };
         } else if (boss && !cell.cleared) { introDark = 4.5; spawnWave(); rs = 'fight'; }
@@ -1532,6 +1528,15 @@
       function updateBoss(e, dt, target) {
         if (e.amalStalker) {
           if (!amalEncounter || amalEncounter.phase !== 'arena') return;
+          e.amalStalker = false;
+          const oldFloor = floorN;
+          floorN = 8;
+          const hp = e.hp, maxHp = e.maxHp;
+          e.hp = e.maxHp = 1e12; e.phaseInvuln = 0; e.despLock = false; e.despFinished = true;
+          updateBoss(e, dt, P);
+          e.hp = hp; e.maxHp = maxHp; floorN = oldFloor; e.amalStalker = true;
+          e.amalMorphT = Math.max(0,(e.amalMorphT||0)-dt); e.r = 105;
+          return;
           const a = Math.atan2(P.y - e.y, P.x - e.x), d = dist(P.x, P.y, e.x, e.y);
           e.face = a; e.amalAttackCd = Math.max(0, (e.amalAttackCd || 3.5) - dt);
           if (e.amalTell > 0) {
@@ -2590,18 +2595,23 @@
         }
         if (a.phase === 'awakening') {
           if (a.timer >= 5.2) {
-            obstacles = []; chest = null; a.phase = 'arena'; a.timer = 0;
-            a.rocks = []; a.formChanges = 0; a.rockReady = false;
-            const b = spawnEnemy('boss', W * 0.5, 175);
-            if (b) { b.amalStalker = true; b.r = 92; b.hp = b.maxHp = 1e12; b.spawnT = 0; b.orbit = 0; b.state = 'walk'; b.amalAttackCd = 3.8; a.boss = b; }
+            a.phase = 'materialize'; a.timer = 0; a.eyeClose = 1; a.materialize = 0;
+            obstacles.push({ x: 350, y: WALL + 145, w: 580, h: 54 });
             P.x = W / 2; P.y = H - WALL - 100; P.vx = P.vy = 0; P.iframes = 2;
-            shake(34); hitstop = 0.25; AudioSys.sfx('roar');
-            banner = null;
+            shake(34); hitstop = 0.25; AudioSys.sfx('boom');
           }
+          return;
+        }
+        if (a.phase === 'materialize') {
+          a.eyeClose = Math.max(0, 1 - a.timer / 1.15);
+          if (a.timer >= 1.15 && !a.boss) { const b = spawnEnemy('boss', W * 0.5, 220); if (b) { b.amalStalker = true; b.r = 105; b.hp = b.maxHp = 1e12; b.spawnT = 0; b.orbit = 0; b.state = 'walk'; b.amalAttackCd = 2.2; b.amalForm = 1; a.boss = b; } a.materialize = 1; shake(22); AudioSys.sfx('roar'); }
+          if (a.timer >= 3.4) { a.phase = 'arena'; a.timer = 0; a.nextForm = 13; }
           return;
         }
         if (a.phase === 'arena') {
           a.survive -= dt;
+          a.nextForm -= dt;
+          if (a.nextForm <= 0 && a.boss) { a.formChanges++; a.boss.amalForm = a.boss.amalForm % 7 + 1; a.boss.amalMorphT = 1.5; a.nextForm = 13; shake(15); ring(a.boss.x,a.boss.y,300,'#8defff',0.8,7); AudioSys.sfx('roar'); if (a.formChanges % 3 === 0) { const rx = clamp(P.x + (P.x < W/2 ? 260 : -260), WALL + 80, W - WALL - 80); a.rocks.push({ x: rx, y: H - WALL - 42, used: false, falling: true, fallT: 0, cycle: ++a.rockCycle }); shake(12); } }
           for (const rock of a.rocks) if (rock.falling) { rock.fallT = (rock.fallT || 0) + dt; if (rock.fallT >= 0.8) { rock.falling = false; rock.y = H - WALL - 42; shake(10); AudioSys.sfx('boom'); } }
           if (pressed.KeyR) {
             const rock = a.rocks.find(q => !q.used && dist(P.x, P.y, q.x, q.y) < 76);
@@ -2616,12 +2626,12 @@
             rock.fly.t += dt; rock.fly.x += rock.fly.vx * dt; rock.fly.y += rock.fly.vy * dt;
             if (a.boss && dist(rock.fly.x, rock.fly.y, a.boss.x, a.boss.y) < a.boss.r + 18) {
               delete rock.fly; a.hits++; a.boss.amalTell = 0; a.boss.amalWave = undefined;
-              a.boss.x = clamp(a.boss.x + (a.boss.x - P.x) * 0.12, WALL + 100, W - WALL - 100);
+              a.boss.x = clamp(a.boss.x + (a.boss.x - P.x) * 0.32, WALL + 100, W - WALL - 100);
               shake(22); ring(a.boss.x, a.boss.y, 260, '#d9c7a1', 0.65, 7); AudioSys.sfx('roar');
               banner = null;
             } else if (rock.fly.t > 2.2 || rock.fly.x < 0 || rock.fly.x > W || rock.fly.y < 0 || rock.fly.y > H) delete rock.fly;
           }
-          if (a.hits >= 1 || a.survive <= 0) {
+          if (a.hits >= 3 || a.survive <= 0) {
             a.phase = 'retreat'; a.timer = 0; ebullets.length = 0;
             if (a.boss) { a.boss.amalTell = 0; a.boss.vx = 0; a.boss.vy = -260; }
             shake(28); AudioSys.sfx('roar');
@@ -3690,12 +3700,13 @@ maxRank = Math.max(maxRank, sr()); ambT -= dt; if (ambT <= 0) { ambT = rand(9, 2
         ctx.fillStyle='#000'; ctx.beginPath(); ctx.ellipse(0,0,38,92,0,0,TAU); ctx.fill();
         ctx.strokeStyle='rgba(120,220,235,.22)'; ctx.lineWidth=3; for(let i=0;i<12;i++){const ang=i*TAU/12+time*.08;ctx.beginPath();ctx.moveTo(Math.cos(ang)*125,Math.sin(ang)*80);ctx.quadraticCurveTo(Math.cos(ang)*250,Math.sin(ang)*180,Math.cos(ang)*330,Math.sin(ang)*125);ctx.stroke();}
         ctx.restore();
-        if (a.phase === 'awakening') { ctx.fillStyle='rgba(0,0,0,'+clamp(0.45+Math.sin(time*9)*.18,0,0.7)+')'; ctx.fillRect(0,0,W,H); }
+        if (a.phase === 'awakening' || a.phase === 'materialize') { ctx.fillStyle='rgba(0,0,0,'+clamp(a.phase==='awakening' ? 0.42+Math.sin(time*9)*.18 : 0.5+0.35*a.eyeClose,0,0.92)+')'; ctx.fillRect(0,0,W,H); }
+        if (a.phase === 'materialize' && a.timer > 1.05) { const k=clamp((a.timer-1.05)/1.8,0,1); ctx.save();ctx.globalAlpha=k;ctx.strokeStyle='rgba(115,235,255,.7)';ctx.lineWidth=5;for(let i=0;i<18;i++){const ang=i*TAU/18+time*.7;ctx.beginPath();ctx.moveTo(W/2+Math.cos(ang)*30,H*.32+Math.sin(ang)*20);ctx.lineTo(W/2+Math.cos(ang)*260,H*.32+Math.sin(ang)*180);ctx.stroke();}ctx.restore(); }
       }
       function drawAmalEncounter() {
         if (!amalEncounter) return;
         const a=amalEncounter;
-        if(a.phase==='corridor') { ctx.save(); ctx.fillStyle='rgba(0,0,0,.22)';ctx.fillRect(46,46,W-92,172);ctx.fillRect(398,218,484,H-264);ctx.strokeStyle='rgba(110,190,215,.22)';ctx.lineWidth=4;ctx.strokeRect(46,46,W-92,172);ctx.strokeRect(398,218,484,H-264);ctx.strokeStyle='rgba(110,190,215,.12)';ctx.lineWidth=2;for(let y=238;y<H-30;y+=58){ctx.beginPath();ctx.moveTo(405,y);ctx.lineTo(875,y);ctx.stroke();}ctx.restore(); }
+        if(a.phase==='corridor') { ctx.save(); ctx.fillStyle='rgba(0,0,0,.25)';ctx.fillRect(46,46,W-92,H-92);ctx.fillStyle='rgba(12,24,35,.28)';ctx.fillRect(342,WALL+150,596,H-WALL-150);ctx.strokeStyle='rgba(110,190,215,.25)';ctx.lineWidth=5;ctx.beginPath();ctx.moveTo(342,WALL+150);ctx.lineTo(342,H-WALL);ctx.moveTo(938,WALL+150);ctx.lineTo(938,H-WALL);ctx.stroke();ctx.restore(); }
         if(a.phase==='arena') {
           for(const rock of a.rocks){
             if(rock.falling){ctx.save();const yy=rock.y+Math.min(260,(rock.fallT||0)*320);ctx.translate(rock.x,yy);ctx.rotate(time*2);ctx.fillStyle='#716e68';ctx.strokeStyle='#b8b3a8';ctx.lineWidth=4;ctx.beginPath();ctx.moveTo(-25,-16);ctx.lineTo(-8,-34);ctx.lineTo(21,-24);ctx.lineTo(29,9);ctx.lineTo(4,27);ctx.lineTo(-25,13);ctx.closePath();ctx.fill();ctx.stroke();ctx.restore();}
