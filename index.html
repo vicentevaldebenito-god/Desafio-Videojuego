@@ -2302,7 +2302,7 @@
       }
 
       function updateAdminPanel() {
-        if (pressed.Escape || pressed.F8) { adminOpen = false; return; }
+        if (pressed.Escape || pressed.KeyY) { adminOpen = false; return; }
         if (pressed.ArrowUp || pressed.KeyW) adminBossFloor = Math.max(1, adminBossFloor - 1);
         if (pressed.ArrowDown || pressed.KeyS) adminBossFloor = Math.min(FLOORS, adminBossFloor + 1);
         for (let i=1;i<=8;i++) if (pressed['Digit'+i]) adminBossFloor=i;
@@ -2318,7 +2318,7 @@
         ctx.save(); ctx.fillStyle='rgba(0,4,12,.95)'; ctx.fillRect(230,90,820,540); ctx.strokeStyle='#ff4fd8'; ctx.lineWidth=3; ctx.strokeRect(230,90,820,540);
         txt('PANEL DE ADMINISTRADOR · TEMPORAL',W/2,145,29,'#ff4fd8','center',12); txt('SELECCIONA EL JEFE QUE QUIERES PROBAR',W/2,190,16,'#cfe0f0','center');
         for(let i=1;i<=8;i++){const y=225+(i-1)*42,active=adminBossFloor===i;ctx.fillStyle=active?'rgba(196,107,255,.22)':'rgba(8,24,40,.9)';ctx.fillRect(340,y,600,34);ctx.strokeStyle=active?'#ff4fd8':'#26384a';ctx.lineWidth=active?2.5:1;ctx.strokeRect(340,y,600,34);txt('['+i+']  SECTOR '+i+' · '+(LOG_ENTRIES.find(q=>q.id==='boss'+i)?.title||'JEFE'),360,y+22,14,active?'#ffe94a':'#cfe0f0','left');}
-        txt('↑ ↓ o 1–8: elegir · ENTER: TELETRANSPORTAR · ESC/F8: cerrar',W/2,590,14,'#8fb8d8','center');ctx.restore();
+        txt('↑ ↓ o 1–8: elegir · ENTER: TELETRANSPORTAR · ESC/Y: cerrar',W/2,590,14,'#8fb8d8','center');ctx.restore();
       }
       function menuFX() {
         ctx.save(); ctx.globalCompositeOperation = 'lighter'; for (let i = 0; i < 6; i++) { const x0 = i * 240 - 80 + Math.sin(time * 0.35 + i) * 50; ctx.fillStyle = 'rgba(90,190,255,0.05)'; ctx.beginPath(); ctx.moveTo(x0, 0); ctx.lineTo(x0 + 80, 0); ctx.lineTo(x0 + 330, H); ctx.lineTo(x0 + 150, H); ctx.fill(); }
@@ -2888,7 +2888,7 @@ maxRank = Math.max(maxRank, sr()); ambT -= dt; if (ambT <= 0) { ambT = rand(9, 2
         }
         time += dt;
         organs = clamp(organs, 0, MAX_ORGANS);
-        if (pressed.F8 && (!MP || !MP.connected)) { adminOpen = !adminOpen; AudioSys.sfx('ui'); }
+        if (pressed.KeyY && (!MP || !MP.connected)) { adminOpen = !adminOpen; AudioSys.sfx('ui'); }
         if (adminOpen) { updateAdminPanel(); return; }
         if (pressed.KeyM) AudioSys.toggleMute();
         for (const m of motes) { m.x += Math.sin(time * m.sp + m.ph) * 8 * dt; m.y -= m.v * dt; if (m.y < -10) { m.y = H + 10; m.x = rand(0, W); } }
