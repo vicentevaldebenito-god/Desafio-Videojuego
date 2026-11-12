@@ -1555,7 +1555,7 @@
           banner = { t: 3.2, max: 3.2, l1: '¡EL JEFE ESTÁ AGOTADO!', l2: 'AHORA PUEDES ACABAR CON ÉL' };
           ring(e.x,e.y,260,'#ff4b55',0.8,7); AudioSys.sfx('roar');
         } else {
-          e.despLock = true; e.despTimer = 0; e.despStage = 0; e.escape = 0;
+          e.despLock = true; e.despTimer = 0; e.despStage = 0; e.escape = 0; e.inhaleHitDone = false;
           e.despLights = null; e.hitDone = false; e.vx = 0; e.vy = 0; e.st = 1.1;
           e.state = bfl() === 1 ? 'desp_chase_telegraph' : 'desp_inhale';
           if (bfl() === 2) inkT = 5;
@@ -1663,9 +1663,17 @@
             if (e.state === 'desp_inhale') {
               decel(e, dt, 1800); e.despTimer += dt;
               const pullPower = (e.despCycles || 0) >= 1 ? 360 : 230;
-              if (target === P) { const a = Math.atan2(e.y-target.y,e.x-target.x); moveEntity(P, Math.cos(a)*pullPower*dt, Math.sin(a)*pullPower*dt, P.r); }
-              else mpSendTargetHit(target, 0, toP + Math.PI, Math.cos(toP+Math.PI)*pullPower, Math.sin(toP+Math.PI)*pullPower);
-              if (e.despTimer >= 5.2) { if (target === P && dist(P.x,P.y,e.x,e.y) < e.r + P.r + 115) hurtEnemyTargetPlayer(target,28,Math.atan2(P.y-e.y,P.x-e.x)); if ((e.despCycles || 0) >= 1) { const aim=Math.atan2(target.y-e.y,target.x-e.x); for(const off of [-0.16,0,0.16]) enemyShoot(e,aim+off,340,14,false); } else { const n=34, off=rand(0,TAU); for(let i=0;i<n;i++) enemyShoot(e,off+i*TAU/n,260,12,false); } e.state='desp_lights'; e.despTimer=0; e.despLights=Array.from({length:5},(_,i)=>({x:W/2+Math.cos(i*TAU/5)*330,y:H/2+Math.sin(i*TAU/5)*230,power:0.35+Math.random()*0.35})); e.despLights[ randi(0,4) ].power=1.35; inkT=10; banner={t:3,max:3,l1:'ENCUENTRA LA LUZ VERDADERA',l2:'ACÉRCATE A LA MÁS BRILLANTE Y PULSA R'}; }
+              if (target === P) {
+                const a = Math.atan2(e.y-target.y,e.x-target.x);
+                moveEntity(P, Math.cos(a)*pullPower*dt, Math.sin(a)*pullPower*dt, P.r);
+                // El círculo rojo es el área peligrosa real: entrar en ella durante la succión causa daño una sola vez.
+                const dangerRadius = Math.max(85,Math.min(360,110+e.despTimer*55));
+                if (!e.inhaleHitDone && dist(P.x,P.y,e.x,e.y) <= dangerRadius + P.r) {
+                  e.inhaleHitDone = true;
+                  hurtEnemyTargetPlayer(target,28,Math.atan2(P.y-e.y,P.x-e.x));
+                }
+              } else mpSendTargetHit(target, 0, toP + Math.PI, Math.cos(toP+Math.PI)*pullPower, Math.sin(toP+Math.PI)*pullPower);
+              if (e.despTimer >= 5.2) { if ((e.despCycles || 0) >= 1) { const aim=Math.atan2(target.y-e.y,target.x-e.x); for(const off of [-0.16,0,0.16]) enemyShoot(e,aim+off,340,14,false); } else { const n=34, off=rand(0,TAU); for(let i=0;i<n;i++) enemyShoot(e,off+i*TAU/n,260,12,false); } e.state='desp_lights'; e.despTimer=0; e.despLights=Array.from({length:5},(_,i)=>({x:W/2+Math.cos(i*TAU/5)*330,y:H/2+Math.sin(i*TAU/5)*230,power:0.35+Math.random()*0.35})); e.despLights[ randi(0,4) ].power=1.35; inkT=10; banner={t:3,max:3,l1:'ENCUENTRA LA LUZ VERDADERA',l2:'ACÉRCATE A LA MÁS BRILLANTE Y PULSA R'}; }
             } else if (e.state === 'desp_lights') {
               decel(e, dt, 3000); inkT=Math.max(inkT,0.15);
               const correct=e.despLights.reduce((a,b)=>b.power>a.power?b:a,e.despLights[0]);
@@ -2923,16 +2931,18 @@
           if ((e.state === 'xt' || e.state === 'xd') && e.tl) e.tl.forEach((L, i) => { ctx.strokeStyle = 'rgba(255,50,60,' + (i === e.n ? pl : 0.2) + ')'; ctx.lineWidth = 20; ctx.beginPath(); ctx.moveTo(L[0], L[1]); ctx.lineTo(L[2], L[3]); ctx.stroke(); });
           if (e.state === 'rw' || e.state === 'rc') { ctx.strokeStyle = 'rgba(255,' + (e.state === 'rc' ? '230,60,' : '60,60,') + pl + ')'; ctx.lineWidth = e.state === 'rc' ? 46 : 14; ctx.beginPath(); ctx.moveTo(e.x, e.y); ctx.lineTo(e.x + Math.cos(e.cA) * 900, e.y + Math.sin(e.cA) * 900); ctx.stroke(); if (e.state === 'rc') { ctx.beginPath(); ctx.arc(e.x, e.y, e.r + 20 + (3 - e.st) * 8, 0, TAU); ctx.stroke(); } }
           for (const q of e.tt || []) if (!q.d) {
-            const pulse = 0.5 + 0.5 * Math.sin(time * 7 + q.x * 0.01);
-            const sx = q.side === 'left' ? camera.x + 12 : q.side === 'right' ? camera.x + W - 12 : q.x + Math.sin(time * 2) * 24;
-            const sy = q.side === 'floor' ? camera.y + H + 24 : q.y + (q.side === 'left' || q.side === 'right' ? Math.sin(time * 3 + q.x) * 35 : 0);
-            ctx.save(); ctx.lineCap='round'; ctx.lineJoin='round'; ctx.shadowColor='#9b6bff'; ctx.shadowBlur=18;
-            ctx.strokeStyle='rgba(70,35,125,.95)'; ctx.lineWidth=30; ctx.beginPath(); ctx.moveTo(sx,sy);
-            ctx.quadraticCurveTo((sx+q.x)*0.5+Math.sin(time*4+q.y)*45,(sy+q.y)*0.5-55,q.x,q.y); ctx.stroke();
-            ctx.strokeStyle='rgba(191,151,255,'+(.55+.35*pulse)+')'; ctx.lineWidth=8; ctx.beginPath(); ctx.moveTo(sx,sy);
-            ctx.quadraticCurveTo((sx+q.x)*0.5+Math.sin(time*4+q.y)*45,(sy+q.y)*0.5-55,q.x,q.y); ctx.stroke();
-            ctx.shadowBlur=0; ctx.fillStyle='rgba(177,127,255,.18)'; ctx.strokeStyle='rgba(205,170,255,.9)'; ctx.lineWidth=3;
-            ctx.beginPath(); ctx.arc(q.x,q.y,48+10*pulse,0,TAU); ctx.fill(); ctx.stroke(); ctx.restore();
+            const pulse = 0.5 + 0.5 * Math.sin(time * 5 + q.x * 0.006);
+            const sx = q.side === 'left' ? camera.x + 12 : q.side === 'right' ? camera.x + W - 12 : q.x;
+            const sy = q.side === 'floor' ? camera.y + H + 18 : q.y;
+            const cx=(sx+q.x)*0.5, cy=(sy+q.y)*0.5-38;
+            ctx.save(); ctx.lineCap='round'; ctx.lineJoin='round';
+            // Dos trazos planos sustituyen al blur por segmento, que era muy costoso.
+            ctx.strokeStyle='rgba(48,24,91,.96)'; ctx.lineWidth=25; ctx.beginPath(); ctx.moveTo(sx,sy);
+            ctx.quadraticCurveTo(cx,cy,q.x,q.y); ctx.stroke();
+            ctx.strokeStyle='rgba(163,119,225,'+(.48+.22*pulse)+')'; ctx.lineWidth=6; ctx.beginPath(); ctx.moveTo(sx,sy);
+            ctx.quadraticCurveTo(cx,cy,q.x,q.y); ctx.stroke();
+            ctx.fillStyle='rgba(177,127,255,.12)'; ctx.strokeStyle='rgba(190,155,235,.72)'; ctx.lineWidth=2;
+            ctx.beginPath(); ctx.arc(q.x,q.y,45+5*pulse,0,TAU); ctx.fill(); ctx.stroke(); ctx.restore();
           }
           if (e.state === 'beams') for (let k = 0; k < 4; k++) { const a = e.bA + k * Math.PI / 2, on = e.st < 2.6, end=rayRoomEnd(e.x,e.y,a); ctx.strokeStyle = on ? 'rgba(210,170,255,.9)' : 'rgba(155,107,255,.35)'; ctx.lineWidth = on ? 18 : 3; ctx.beginPath(); ctx.moveTo(e.x, e.y); ctx.lineTo(end.x,end.y); ctx.stroke(); }
           if ((e.state === 'zt' || e.state === 'zd') && e.zp) { ctx.strokeStyle = 'rgba(255,60,80,' + pl + ')'; ctx.lineWidth = 16; ctx.beginPath(); e.zp.forEach((p, i) => { if (i) ctx.lineTo(p[0], p[1]); else ctx.moveTo(p[0], p[1]); }); ctx.stroke(); }
@@ -3913,12 +3923,13 @@ maxRank = Math.max(maxRank, sr()); ambT -= dt; if (ambT <= 0) { ambT = rand(9, 2
           for (let i=0;i<bossPuzzle.despLights.length;i++) {
             const q=bossPuzzle.despLights[i], bright=q.power>=1, pulse=.82+.18*Math.sin(time*5+i);
             ctx.save(); ctx.translate(q.x,q.y); ctx.globalCompositeOperation='lighter';
-            ctx.globalAlpha=bright?.98:.48; ctx.shadowColor=bright?'#c9f8ff':'#6c9cae'; ctx.shadowBlur=bright?42:14;
-            ctx.fillStyle=bright?'rgba(196,247,255,.24)':'rgba(120,174,190,.12)';
-            ctx.beginPath(); ctx.moveTo(0,-8); ctx.quadraticCurveTo(28,-28,52,0); ctx.quadraticCurveTo(28,28,0,8); ctx.closePath(); ctx.fill();
-            ctx.fillStyle=bright?'#eaffff':'#8cb9c6'; ctx.beginPath(); ctx.ellipse(0,0,bright?15:9,bright?9:6,0,0,TAU); ctx.fill();
-            ctx.fillStyle='#ffffff'; ctx.beginPath(); ctx.arc(0,0,bright?6:3,0,TAU); ctx.fill();
-            for(let ray=0;ray<8;ray++){const a=ray*TAU/8;ctx.strokeStyle=bright?'rgba(225,252,255,.8)':'rgba(145,190,205,.35)';ctx.lineWidth=bright?2.5:1;ctx.beginPath();ctx.moveTo(Math.cos(a)*18,Math.sin(a)*18);ctx.lineTo(Math.cos(a)*(bright?34:23),Math.sin(a)*(bright?34:23));ctx.stroke();}
+            ctx.globalAlpha=bright?.92:.32;
+            // Sin shadowBlur ni rayos por luz: el resplandor se simula con elipses baratas.
+            ctx.fillStyle=bright?'rgba(196,247,255,.12)':'rgba(120,174,190,.055)';
+            ctx.beginPath(); ctx.ellipse(0,0,bright?48:27,bright?27:15,0,0,TAU); ctx.fill();
+            ctx.fillStyle=bright?'#eaffff':'#8cb9c6'; ctx.beginPath(); ctx.ellipse(0,0,bright?15:8,bright?9:5,0,0,TAU); ctx.fill();
+            ctx.fillStyle='#ffffff'; ctx.beginPath(); ctx.arc(0,0,bright?5:2.5,0,TAU); ctx.fill();
+            if(bright){ctx.strokeStyle='rgba(225,252,255,.7)';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(-25,0);ctx.lineTo(-37,0);ctx.moveTo(25,0);ctx.lineTo(37,0);ctx.moveTo(0,-17);ctx.lineTo(0,-27);ctx.moveTo(0,17);ctx.lineTo(0,27);ctx.stroke();}
             ctx.restore();
           }
           ctx.globalAlpha=1; ctx.restore();
