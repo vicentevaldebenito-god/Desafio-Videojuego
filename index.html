@@ -179,11 +179,11 @@
         circle(142 + touchPad.joyX*55,578 + touchPad.joyY*55,31,'rgba(46,230,255,.32)','rgba(150,235,255,.8)');
         circle(970,590,51,'rgba(255,177,59,.18)','rgba(255,177,59,.85)');
         circle(1090,590,57,'rgba(125,255,106,.18)','rgba(125,255,106,.8)');
-        circle(1180,470,57,'rgba(46,230,255,.18)','rgba(46,230,255,.8)');
+        circle(1180,470,63,'rgba(46,230,255,.24)','rgba(46,230,255,.95)'); ctx.beginPath(); ctx.arc(1180,470,54,0,TAU); ctx.strokeStyle='rgba(184,244,255,.55)'; ctx.lineWidth=2; ctx.stroke();
         ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.font='bold 15px Arial';
         ctx.fillStyle='#ffd08a'; ctx.fillText('DASH',970,590);
         ctx.fillStyle='#baffc8'; ctx.fillText('ESPECIAL',1090,590);
-        ctx.fillStyle='#b8f4ff'; ctx.fillText('USAR',1180,462); ctx.fillText('R',1180,484);
+        ctx.fillStyle='#b8f4ff'; ctx.font='bold 25px Arial'; ctx.fillText('R',1180,462); ctx.font='bold 11px Arial'; ctx.fillText('INTERACTUAR',1180,491);
         ctx.fillStyle='rgba(180,225,245,.72)'; ctx.font='12px Arial'; ctx.fillText('MOVER',142,682);
         ctx.restore();
       }
@@ -230,9 +230,9 @@
           touchPad.moveId = e.pointerId; updateTouchMove(e);
         } else if (p.x > 900 && p.x <= 1035 && p.y > 520 && touchPad.dashId === null) {
           touchPad.dashId = e.pointerId; pressed.Space = true;
-        } else if (p.x > 1015 && p.y > 520 && touchPad.specialId === null) {
+        } else if (p.x >= 1033 && p.x <= 1147 && p.y >= 533 && p.y <= 647 && touchPad.specialId === null) {
           touchPad.specialId = e.pointerId; pressed.KeyF = true;
-        } else if (p.x > 1090 && p.y > 385 && p.y <= 535 && touchPad.interactId === null) {
+        } else if (p.x >= 1117 && p.x <= 1243 && p.y >= 407 && p.y <= 533 && touchPad.interactId === null) {
           touchPad.interactId = e.pointerId;
           pressed.KeyR = true;
           if (MP && MP.connected && !MP.isHost && MP.socket && MP.socket.readyState === WebSocket.OPEN) {
