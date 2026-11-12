@@ -423,7 +423,7 @@
       let P = null;             // jugador
       let enemies = [], bullets = [], ebullets = [], parts = [], clouds = [], flares = [], pools = [];
       let pickups = [], texts = [], pings = [], lights = [], obstacles = [], motes = [];
-      let secret = null;
+      let secret = null, amalEncounter = null;
       let floorN = 1, roomN = 1, score = 0, kills = 0, combo = 0, comboT = 0;
       let rs = 'intro', introT = 0, clearT = 0, waveQueue = [], doorOpen = 0;
       let shakeMag = 0, hitstop = 0, hurtFlash = 0, fade = 0, banner = null, hint = 0, ambPing = 8;
@@ -786,6 +786,7 @@
       }
 
       function startRoom() {
+        amalEncounter = null;
         enemies = []; bullets = []; ebullets = []; clouds = []; flares = []; pools = []; pickups = []; texts = []; pings = [];
         if (['start', 'shop', 'secret', 'altar'].includes(cell.type)) cell.cleared = true;
         const boss = cell.type === 'boss';
@@ -794,14 +795,25 @@
         bakeBG();
         P.x = W / 2; P.y = H - WALL - 110; P.vx = P.vy = 0; P.pressure = 0; P.overheat = false;
         P.shield = has('shark') + chm('plate'); P.iframes = 1; P.dashT = 0; P.revealT = 0;
-        waveQueue = boss ? [['boss']] : makeWaves();
+        const amalFinalRoom = boss && floorN === 8 && !(MP && MP.connected);
+        waveQueue = amalFinalRoom ? [] : boss ? [['boss']] : makeWaves();
         sidePortal = null; shopNear = null; xwList = []; chest = null; current = null; for (const o of orbs) addXP(o.v); orbs = []; feats = [];
         inMini = cell.type === 'mini'; if (inMini) { waveQueue = [['mini']]; genObstacles(true); bakeBG(); }
         if (cell.cleared) waveQueue = [];
         rs = 'intro'; introT = 1.6; doorOpen = 0; clearT = 0; if (!waveQueue.length) { rs = 'cleared'; doorOpen = 1; }
         banner = { t: 2.6, max: 2.6, l1: 'ABISMO ' + floorN + ' // ' + THEMES[floorN - 1].name, l2: boss ? '¡ALGO ENORME SE MUEVE EN LA OSCURIDAD!' : { combat: 'AGUAS INFESTADAS', start: 'CÁMARA DE DESCENSO', shop: 'LA GUARIDA DEL PULPO', secret: 'CÁMARA OLVIDADA', mini: 'DEPREDADOR', altar: 'ALTAR OSCURO' }[cell.type] };
         fade = 1;
-        if (boss && !cell.cleared) { introDark = 4.5; spawnWave(); rs = 'fight'; }
+        if (amalFinalRoom && !cell.cleared) {
+          obstacles = [
+            { x: 260, y: WALL + 8, w: 72, h: H - WALL * 2 - 16 },
+            { x: W - 332, y: WALL + 8, w: 72, h: H - WALL * 2 - 16 }
+          ];
+          P.x = W / 2; P.y = H - WALL - 90; P.iframes = 1.5;
+          chest = { x: W / 2, y: WALL + 130, open: false, amal: true };
+          amalEncounter = { phase: 'corridor', timer: 0, rocks: [], hits: 0, survive: 88, boss: null, eyePulse: 0 };
+          rs = 'fight'; introDark = 0;
+          banner = { t: 4, max: 4, l1: 'EL UMBRAL DE LA AMALGAMA', l2: 'Avanza por el pasillo. No mires demasiado tiempo.' };
+        } else if (boss && !cell.cleared) { introDark = 4.5; spawnWave(); rs = 'fight'; }
         if (cell.type === 'shop') setupShop(); else if (cell.type === 'altar') { chest = { x: W / 2, y: H / 2, altar: true, open: !!cell.looted }; if (!cell.looted) banner = { t: 2.6, max: 2.6, l1: 'ALTAR OSCURO', l2: 'Sacrifica el 15% de tu vida MÁXIMA por 2 niveles (20%: no da nada y pierdes el doble) · [R]' }; }
         else if (cell.type === 'secret') { chest = { x: W / 2, y: H / 2, open: !!cell.looted }; if (!cell.looted) banner = { t: 2.6, max: 2.6, l1: 'CÁMARA OLVIDADA', l2: 'Un cofre sellado late en la oscuridad · [R] forzar cerradura' }; }
         if (cell.cleared) revealSecrets();
@@ -1149,6 +1161,7 @@
          --------------------------------------------------------------------- */
       function hurtEnemy(e, dmg, o) {
         o = o || {};
+        if (e.amalStalker) return 0;
         if (e.dead || e.spawnT > 0 || e.orbit > 0) return 0;
         if (MP && MP.connected && !MP.isHost && !o.fromMP) {
           if (e.netId && MP.socket && MP.socket.readyState === WebSocket.OPEN) MP.socket.send(JSON.stringify({
@@ -1199,7 +1212,7 @@
         return d;
       }
       function killEnemy(e, noDrop) {
-        if (e.dead) return;
+        if (e.amalStalker || e.dead) return;
         e.dead = true; e.impaled = null; e.pinned = null; e.pull = false;
         combo++; comboT = 3.2;
         if (e.bounty) { const bm = P.path === 'A' ? 1 + 0.6 * P.tier : P.path === 'B' ? 0.6 : 1; organs += Math.round(15 * bm); dropXP(e, 60 * bm); floatText('¡RECOMPENSA!', e.x, e.y - e.r - 20, '#ffd23f', 18); }
@@ -1513,6 +1526,28 @@
       }
 
       function updateBoss(e, dt, target) {
+        if (e.amalStalker) {
+          if (!amalEncounter || amalEncounter.phase !== 'arena') return;
+          const a = Math.atan2(P.y - e.y, P.x - e.x), d = dist(P.x, P.y, e.x, e.y);
+          e.face = a; e.amalAttackCd = Math.max(0, (e.amalAttackCd || 3.5) - dt);
+          if (e.amalTell > 0) {
+            e.amalTell -= dt; e.vx *= 0.82; e.vy *= 0.82;
+            if (e.amalTell <= 0) { e.amalWave = 0; e.amalHit = false; shake(18); AudioSys.sfx('roar'); }
+          } else if (e.amalWave !== undefined && e.amalWave < 0.72) {
+            e.amalWave += dt;
+            const radius = 35 + 310 * (e.amalWave / 0.72);
+            if (!e.amalHit && Math.abs(d - radius) < 30 + P.r) { hurtEnemyTargetPlayer(P, 24, a); e.amalHit = true; }
+            if (e.amalWave >= 0.72) { delete e.amalWave; e.amalAttackCd = 5.2; }
+          } else {
+            const speed = d > 230 ? 92 : 36;
+            if (d > 1) { e.x += Math.cos(a) * speed * dt; e.y += Math.sin(a) * speed * dt; }
+            if (d < e.r + P.r + 8 && e.hitCd <= 0) { hurtEnemyTargetPlayer(P, 18, a); e.hitCd = 1.1; }
+            if (e.amalAttackCd <= 0) { e.amalTell = 1.35; e.amalAttackCd = 99; ring(e.x, e.y, 330, '#ff354f', 0.9, 8); banner = { t: 1.2, max: 1.2, l1: '¡EL FONDO SE QUIEBRA!', l2: 'Aléjate de la onda expansiva' }; }
+          }
+          e.hitCd = Math.max(0, (e.hitCd || 0) - dt);
+          e.x = clamp(e.x, WALL + e.r, W - WALL - e.r); e.y = clamp(e.y, WALL + e.r, H - WALL - e.r);
+          return;
+        }
         const toP = Math.atan2(target.y - e.y, target.x - e.x), dP = dist(e.x, e.y, target.x, target.y);
         const enr = e.hp < e.maxHp * 0.5;
         e.face = toP; e.st -= dt; if (e.state === 'walk') e.st -= dt * (0.8 + 0.4 * (e.ph || 0)); e.vuln = Math.max(0, (e.vuln || 0) - dt);
@@ -2121,6 +2156,15 @@
       }
       function drawChest() {
         if (!chest) return; const c = chest, o = c.open;
+        if (c.amal) {
+          ctx.save(); ctx.translate(c.x, c.y + Math.sin(time * 1.8) * 2);
+          ctx.fillStyle = 'rgba(0,0,0,.65)'; ctx.beginPath(); ctx.ellipse(0, 28, 55, 15, 0, 0, TAU); ctx.fill();
+          ctx.fillStyle = '#171b24'; ctx.fillRect(-43, -8, 86, 38); ctx.fillStyle = '#343b49'; ctx.fillRect(-39, -27, 78, 22);
+          ctx.strokeStyle = '#9aa9b8'; ctx.lineWidth = 3; ctx.strokeRect(-43, -8, 86, 38); ctx.strokeRect(-39, -27, 78, 22);
+          ctx.fillStyle = '#b7e9ef'; ctx.shadowColor = '#75eaff'; ctx.shadowBlur = 18; ctx.beginPath(); ctx.arc(0, -7, 7 + Math.sin(time * 4) * 1.5, 0, TAU); ctx.fill(); ctx.shadowBlur = 0; ctx.restore();
+          if (!o && dist(P.x, P.y, c.x, c.y) < 100) txt('[R] DESPERTAR LO QUE HAY EN EL COFRE', c.x, c.y - 62, 13, '#a9efff', 'center', 8);
+          return;
+        }
         if (c.altar) {
           ctx.save(); ctx.translate(c.x, c.y); ctx.fillStyle = 'rgba(0,0,0,.4)'; ctx.beginPath(); ctx.ellipse(0, 36, 50, 13, 0, 0, TAU); ctx.fill(); ctx.fillStyle = '#2a2430'; ctx.fillRect(-34, 0, 68, 34); ctx.fillStyle = '#3a3242'; ctx.fillRect(-26, -16, 52, 18); ctx.strokeStyle = '#7a5a8a'; ctx.lineWidth = 2; ctx.strokeRect(-34, 0, 68, 34);
           if (!o) { ctx.globalCompositeOperation = 'lighter'; const g = ctx.createRadialGradient(0, -34, 2, 0, -34, 80); g.addColorStop(0, 'rgba(255,60,60,.6)'); g.addColorStop(1, 'rgba(255,60,60,0)'); ctx.fillStyle = g; ctx.beginPath(); ctx.arc(0, -34, 80, 0, TAU); ctx.fill(); ctx.globalCompositeOperation = 'source-over'; ctx.fillStyle = '#ff3b4a'; ctx.beginPath(); ctx.moveTo(0, -56 + Math.sin(time * 3) * 3); ctx.lineTo(12, -34); ctx.lineTo(0, -14); ctx.lineTo(-12, -34); ctx.closePath(); ctx.fill(); }
@@ -2528,7 +2572,74 @@
         dim(0.9); const c = CHARS[P.char]; txt('MEJORA DE CLASE · ' + c.n, W / 2, 110, 34, c.col, 'center', 14); txt('Elige UNA ruta · Rango II en nivel 10 · Rango III en nivel 20 · 1 / 2 o clic', W / 2, 146, 15, '#cfe0f0', 'center');
         CPATH[P.char].forEach((p, i) => { const x = 200 + i * 450, hov = mouse.x > x && mouse.x < x + 420 && mouse.y > 200 && mouse.y < 560; ctx.fillStyle = 'rgba(8,24,40,.95)'; ctx.fillRect(x, 200, 420, 360); ctx.strokeStyle = c.col; ctx.lineWidth = hov ? 4 : 2; ctx.strokeRect(x, 200, 420, 360); ctx.fillStyle = c.col + '22'; ctx.fillRect(x, 200, 420, 90); txt('RUTA ' + (i ? 'B' : 'A') + '  [' + (i + 1) + ']', x + 20, 236, 14, '#8fb8d8', 'left'); txt(p.n, x + 20, 274, 26, c.col, 'left', 8); wrap(p.d, 380, 17).forEach((l, k) => txt(l, x + 20, 340 + k * 26, 17, '#e6f2ff', 'left')); });
       }
+      function updateAmalEncounter(dt) {
+        const a = amalEncounter;
+        if (!a) return;
+        a.timer += dt;
+        if (a.phase === 'corridor') {
+          if (pressed.KeyR && chest && dist(P.x, P.y, chest.x, chest.y) < 88) {
+            chest.open = true; a.phase = 'awakening'; a.timer = 0; P.vx = P.vy = 0;
+            shake(26); hitstop = 0.16; AudioSys.sfx('roar');
+            banner = { t: 4.5, max: 4.5, l1: 'ALGO TE ESTÁ MIRANDO', l2: 'El ojo se abre en la oscuridad...' };
+          }
+          return;
+        }
+        if (a.phase === 'awakening') {
+          if (a.timer >= 5.2) {
+            obstacles = []; chest = null; a.phase = 'arena'; a.timer = 0;
+            a.rocks = [
+              { x: 245, y: 205, used: false }, { x: 1035, y: 205, used: false },
+              { x: 245, y: 510, used: false }, { x: 1035, y: 510, used: false }
+            ];
+            const b = spawnEnemy('boss', W * 0.5, 175);
+            if (b) { b.amalStalker = true; b.r = 92; b.hp = b.maxHp = 1e12; b.spawnT = 0; b.orbit = 0; b.state = 'walk'; b.amalAttackCd = 3.8; a.boss = b; }
+            P.x = W / 2; P.y = H - WALL - 100; P.vx = P.vy = 0; P.iframes = 2;
+            shake(34); hitstop = 0.25; AudioSys.sfx('roar');
+            banner = { t: 4, max: 4, l1: 'LA AMALGAMA', l2: 'NO PUEDES MATARLA · HAZ QUE SE RETIRE' };
+          }
+          return;
+        }
+        if (a.phase === 'arena') {
+          a.survive -= dt;
+          if (pressed.KeyR) {
+            const rock = a.rocks.find(q => !q.used && dist(P.x, P.y, q.x, q.y) < 76);
+            if (rock && a.boss) {
+              rock.used = true; rock.fly = { x: rock.x, y: rock.y, t: 0 };
+              const ang = Math.atan2(a.boss.y - rock.y, a.boss.x - rock.x);
+              rock.fly.vx = Math.cos(ang) * 920; rock.fly.vy = Math.sin(ang) * 920;
+              AudioSys.sfx('boom'); floatText('¡LANZASTE UNA ROCA!', P.x, P.y - 32, '#d7c7a0', 13);
+            }
+          }
+          for (const rock of a.rocks) if (rock.fly) {
+            rock.fly.t += dt; rock.fly.x += rock.fly.vx * dt; rock.fly.y += rock.fly.vy * dt;
+            if (a.boss && dist(rock.fly.x, rock.fly.y, a.boss.x, a.boss.y) < a.boss.r + 18) {
+              delete rock.fly; a.hits++; a.boss.amalTell = 0; a.boss.amalWave = undefined;
+              a.boss.x = clamp(a.boss.x + (a.boss.x - P.x) * 0.12, WALL + 100, W - WALL - 100);
+              shake(22); ring(a.boss.x, a.boss.y, 260, '#d9c7a1', 0.65, 7); AudioSys.sfx('roar');
+              banner = { t: 1.8, max: 1.8, l1: '¡LA AMALGAMA RETROCEDE!', l2: 'Golpes de roca: ' + a.hits + '/3' };
+            } else if (rock.fly.t > 2.2 || rock.fly.x < 0 || rock.fly.x > W || rock.fly.y < 0 || rock.fly.y > H) delete rock.fly;
+          }
+          if (a.hits >= 3 || a.survive <= 0) {
+            a.phase = 'retreat'; a.timer = 0; ebullets.length = 0;
+            if (a.boss) { a.boss.amalTell = 0; a.boss.vx = 0; a.boss.vy = -260; }
+            shake(28); AudioSys.sfx('roar');
+            banner = { t: 3.2, max: 3.2, l1: 'LA CRIATURA SE RETIRA', l2: a.hits >= 3 ? 'Las rocas la han obligado a retroceder' : 'Has sobrevivido a su presencia' };
+          }
+          return;
+        }
+        if (a.phase === 'retreat') {
+          if (a.boss) { a.boss.y -= 170 * dt; a.boss.x += Math.sin(time * 2) * 35 * dt; }
+          if (a.timer >= 4.5) {
+            enemies = []; amalEncounter = null; rs = 'cleared'; cell.cleared = true; doorOpen = 1;
+            organs = Math.min(MAX_ORGANS, Math.round((organs + 7) * (1 + Math.min(0.5, P.st.econ))));
+            P.hp = Math.min(P.maxHp, P.hp + Math.round(P.maxHp * (0.1 + P.st.heal)));
+            exitPortal = { x: W / 2, y: H / 2 }; revealSecrets(); saveMeta(); AudioSys.sfx('win');
+            banner = { t: 3, max: 3, l1: 'HAS SOBREVIVIDO A LA AMALGAMA', l2: 'La entidad sigue viva... en algún lugar.' };
+          }
+        }
+      }
       function roomLogic(dt) {
+        if (amalEncounter) { updateAmalEncounter(dt); return; }
         if (chest && chest.altar && !chest.open && pressed.KeyR && dist(P.x, P.y, chest.x, chest.y) < 80) {
           const altarCost = Math.round(P.maxHp * 0.15), bad = Math.random() < 0.2, paid = bad ? altarCost * 2 : altarCost;
           if (P.maxHp - paid >= 40) {
@@ -3564,18 +3675,47 @@ maxRank = Math.max(maxRank, sr()); ambT -= dt; if (ambT <= 0) { ambT = rand(9, 2
         ctx.restore();
       }
 
+      function drawAmalBackdrop() {
+        if (!amalEncounter || !['awakening','arena','retreat'].includes(amalEncounter.phase)) return;
+        const a = amalEncounter, cx = W * 0.5, cy = H * 0.36;
+        ctx.save(); ctx.globalAlpha = a.phase === 'awakening' ? Math.min(1, a.timer / 1.2) : 0.48 + 0.12 * Math.sin(time * 1.7);
+        const g = ctx.createRadialGradient(cx, cy, 10, cx, cy, 440); g.addColorStop(0, 'rgba(20,55,75,.05)'); g.addColorStop(0.72, 'rgba(5,13,24,.75)'); g.addColorStop(1, 'rgba(0,0,0,.98)'); ctx.fillStyle = g; ctx.fillRect(0,0,W,H);
+        ctx.translate(cx, cy); ctx.rotate(Math.sin(time * 0.7) * 0.025);
+        ctx.fillStyle = '#050a12'; ctx.strokeStyle = 'rgba(125,220,235,.45)'; ctx.lineWidth = 8;
+        ctx.beginPath(); ctx.ellipse(0,0,300,145,0,0,TAU); ctx.fill(); ctx.stroke();
+        const iris = ctx.createRadialGradient(-22,-12,8,0,0,112); iris.addColorStop(0,'#d9ffff'); iris.addColorStop(.22,'#5ca8b8'); iris.addColorStop(.58,'#173e50'); iris.addColorStop(1,'#02060c');
+        ctx.fillStyle=iris; ctx.beginPath(); ctx.ellipse(0,0,112,112,0,0,TAU); ctx.fill();
+        ctx.fillStyle='#000'; ctx.beginPath(); ctx.ellipse(0,0,38,92,0,0,TAU); ctx.fill();
+        ctx.strokeStyle='rgba(120,220,235,.22)'; ctx.lineWidth=3; for(let i=0;i<12;i++){const ang=i*TAU/12+time*.08;ctx.beginPath();ctx.moveTo(Math.cos(ang)*125,Math.sin(ang)*80);ctx.quadraticCurveTo(Math.cos(ang)*250,Math.sin(ang)*180,Math.cos(ang)*330,Math.sin(ang)*125);ctx.stroke();}
+        ctx.restore();
+        if (a.phase === 'awakening') { ctx.fillStyle='rgba(0,0,0,'+clamp(0.45+Math.sin(time*9)*.18,0,0.7)+')'; ctx.fillRect(0,0,W,H); txt('NO DEBISTE ABRIRLO',W/2,H-92,22,'#d9faff','center',12); }
+      }
+      function drawAmalEncounter() {
+        if (!amalEncounter) return;
+        const a=amalEncounter;
+        if(a.phase==='corridor') { ctx.save(); ctx.fillStyle='rgba(0,0,0,.18)';ctx.fillRect(332,WALL,616,H-WALL*2);ctx.strokeStyle='rgba(110,190,215,.18)';ctx.lineWidth=3;for(let y=WALL+20;y<H-WALL;y+=42){ctx.beginPath();ctx.moveTo(350,y);ctx.lineTo(930,y);ctx.stroke();}ctx.restore(); }
+        if(a.phase==='arena') {
+          for(const rock of a.rocks){
+            if(rock.fly){ctx.save();ctx.translate(rock.fly.x,rock.fly.y);ctx.rotate(rock.fly.t*9);ctx.fillStyle='#8b8274';ctx.strokeStyle='#d8d0bd';ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(-18,-13);ctx.lineTo(-5,-25);ctx.lineTo(18,-15);ctx.lineTo(23,8);ctx.lineTo(2,22);ctx.lineTo(-20,12);ctx.closePath();ctx.fill();ctx.stroke();ctx.restore();}
+            else if(!rock.used){ctx.save();ctx.translate(rock.x,rock.y);ctx.rotate(Math.sin(time*1.5+rock.x)*.08);ctx.fillStyle='#716e68';ctx.strokeStyle='#b8b3a8';ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(-23,-14);ctx.lineTo(-8,-30);ctx.lineTo(18,-22);ctx.lineTo(27,7);ctx.lineTo(4,25);ctx.lineTo(-24,13);ctx.closePath();ctx.fill();ctx.stroke();ctx.restore();if(dist(P.x,P.y,rock.x,rock.y)<90)txt('[R] LANZAR ROCA',rock.x,rock.y-40,12,'#e7dfce','center',6);}
+          }
+          panel( W/2-150, 16, 300, 42 ); txt('AHUYENTA A LA AMALGAMA',W/2,34,13,'#c8f5ff','center',7); txt('ROCAS '+a.hits+'/3  ·  RESISTE '+Math.ceil(a.survive)+'s',W/2,49,10,'#dcebf4','center');
+        }
+      }
       function drawWorld() {
         const th = THEMES[floorN - 1];
         glowQ = [];
         ctx.drawImage(bgCv, 0, 0);
         drawShafts();
         drawCaustics();
+        drawAmalBackdrop();
         drawPools(); drawClouds(); drawSecret();
         drawBullets();
         drawRemoteBullets();
         drawPickups();
         for (const e of enemies) if (e.spawnT > 0) drawEnemy(e);
         for (const e of enemies) if (e.spawnT <= 0) drawEnemy(e);
+        drawAmalEncounter();
         drawFlares();
         drawEBullets();
         // Jugador local: visible mientras está caído; desaparece al pasar a espectador.
