@@ -805,14 +805,17 @@
         fade = 1;
         if (amalFinalRoom && !cell.cleared) {
           obstacles = [
-            { x: 260, y: WALL + 8, w: 72, h: H - WALL * 2 - 16 },
-            { x: W - 332, y: WALL + 8, w: 72, h: H - WALL * 2 - 16 }
+            { x: 360, y: WALL + 178, w: 560, h: 38 },
+            { x: 360, y: WALL + 178, w: 38, h: H - WALL - 178 },
+            { x: 882, y: WALL + 178, w: 38, h: H - WALL - 178 },
+            { x: WALL + 8, y: WALL + 8, w: 38, h: 170 },
+            { x: W - WALL - 46, y: WALL + 8, w: 38, h: 170 }
           ];
-          P.x = W / 2; P.y = H - WALL - 90; P.iframes = 1.5;
-          chest = { x: W / 2, y: WALL + 130, open: false, amal: true };
-          amalEncounter = { phase: 'corridor', timer: 0, rocks: [], hits: 0, survive: 88, boss: null, eyePulse: 0 };
+          P.x = W / 2; P.y = H - WALL - 54; P.iframes = 1.5;
+          chest = { x: W / 2, y: WALL + 92, open: false, amal: true };
+          amalEncounter = { phase: 'corridor', timer: 0, rocks: [], hits: 0, survive: 88, boss: null, eyePulse: 0, formChanges: 0, rockReady: false };
           rs = 'fight'; introDark = 0;
-          banner = { t: 4, max: 4, l1: 'EL UMBRAL DE LA AMALGAMA', l2: 'Avanza por el pasillo. No mires demasiado tiempo.' };
+          banner = { t: 2, max: 2, l1: 'EL UMBRAL', l2: '' };
         } else if (boss && !cell.cleared) { introDark = 4.5; spawnWave(); rs = 'fight'; }
         if (cell.type === 'shop') setupShop(); else if (cell.type === 'altar') { chest = { x: W / 2, y: H / 2, altar: true, open: !!cell.looted }; if (!cell.looted) banner = { t: 2.6, max: 2.6, l1: 'ALTAR OSCURO', l2: 'Sacrifica el 15% de tu vida MÁXIMA por 2 niveles (20%: no da nada y pierdes el doble) · [R]' }; }
         else if (cell.type === 'secret') { chest = { x: W / 2, y: H / 2, open: !!cell.looted }; if (!cell.looted) banner = { t: 2.6, max: 2.6, l1: 'CÁMARA OLVIDADA', l2: 'Un cofre sellado late en la oscuridad · [R] forzar cerradura' }; }
@@ -1532,7 +1535,7 @@
           e.face = a; e.amalAttackCd = Math.max(0, (e.amalAttackCd || 3.5) - dt);
           if (e.amalTell > 0) {
             e.amalTell -= dt; e.vx *= 0.82; e.vy *= 0.82;
-            if (e.amalTell <= 0) { e.amalWave = 0; e.amalHit = false; shake(18); AudioSys.sfx('roar'); }
+            if (e.amalTell <= 0) { e.amalWave = 0; e.amalHit = false; e.amalForm = ((e.amalForm || 0) + 1) % 3; amalEncounter.formChanges = (amalEncounter.formChanges || 0) + 1; shake(18); AudioSys.sfx('roar'); if (amalEncounter.formChanges >= 3 && !amalEncounter.rockReady) { amalEncounter.rockReady = true; const rx = clamp(P.x + (P.x < W/2 ? 230 : -230), WALL + 70, W - WALL - 70); amalEncounter.rocks = [{ x: rx, y: H - WALL - 42, used: false, falling: true, fallT: 0 }]; shake(16); } }
           } else if (e.amalWave !== undefined && e.amalWave < 0.72) {
             e.amalWave += dt;
             const radius = 35 + 310 * (e.amalWave / 0.72);
@@ -1542,7 +1545,7 @@
             const speed = d > 230 ? 92 : 36;
             if (d > 1) { e.x += Math.cos(a) * speed * dt; e.y += Math.sin(a) * speed * dt; }
             if (d < e.r + P.r + 8 && e.hitCd <= 0) { hurtEnemyTargetPlayer(P, 18, a); e.hitCd = 1.1; }
-            if (e.amalAttackCd <= 0) { e.amalTell = 1.35; e.amalAttackCd = 99; ring(e.x, e.y, 330, '#ff354f', 0.9, 8); banner = { t: 1.2, max: 1.2, l1: '¡EL FONDO SE QUIEBRA!', l2: 'Aléjate de la onda expansiva' }; }
+            if (e.amalAttackCd <= 0) { e.amalTell = 1.35; e.amalAttackCd = 5.2; ring(e.x, e.y, 330, '#ff354f', 0.9, 8); shake(5); }
           }
           e.hitCd = Math.max(0, (e.hitCd || 0) - dt);
           e.x = clamp(e.x, WALL + e.r, W - WALL - e.r); e.y = clamp(e.y, WALL + e.r, H - WALL - e.r);
@@ -2587,15 +2590,12 @@
         if (a.phase === 'awakening') {
           if (a.timer >= 5.2) {
             obstacles = []; chest = null; a.phase = 'arena'; a.timer = 0;
-            a.rocks = [
-              { x: 245, y: 205, used: false }, { x: 1035, y: 205, used: false },
-              { x: 245, y: 510, used: false }, { x: 1035, y: 510, used: false }
-            ];
+            a.rocks = []; a.formChanges = 0; a.rockReady = false;
             const b = spawnEnemy('boss', W * 0.5, 175);
             if (b) { b.amalStalker = true; b.r = 92; b.hp = b.maxHp = 1e12; b.spawnT = 0; b.orbit = 0; b.state = 'walk'; b.amalAttackCd = 3.8; a.boss = b; }
             P.x = W / 2; P.y = H - WALL - 100; P.vx = P.vy = 0; P.iframes = 2;
             shake(34); hitstop = 0.25; AudioSys.sfx('roar');
-            banner = { t: 4, max: 4, l1: 'LA AMALGAMA', l2: 'NO PUEDES MATARLA · HAZ QUE SE RETIRE' };
+            banner = null;
           }
           return;
         }
@@ -2616,14 +2616,14 @@
               delete rock.fly; a.hits++; a.boss.amalTell = 0; a.boss.amalWave = undefined;
               a.boss.x = clamp(a.boss.x + (a.boss.x - P.x) * 0.12, WALL + 100, W - WALL - 100);
               shake(22); ring(a.boss.x, a.boss.y, 260, '#d9c7a1', 0.65, 7); AudioSys.sfx('roar');
-              banner = { t: 1.8, max: 1.8, l1: '¡LA AMALGAMA RETROCEDE!', l2: 'Golpes de roca: ' + a.hits + '/3' };
+              banner = null;
             } else if (rock.fly.t > 2.2 || rock.fly.x < 0 || rock.fly.x > W || rock.fly.y < 0 || rock.fly.y > H) delete rock.fly;
           }
-          if (a.hits >= 3 || a.survive <= 0) {
+          if (a.hits >= 1 || a.survive <= 0) {
             a.phase = 'retreat'; a.timer = 0; ebullets.length = 0;
             if (a.boss) { a.boss.amalTell = 0; a.boss.vx = 0; a.boss.vy = -260; }
             shake(28); AudioSys.sfx('roar');
-            banner = { t: 3.2, max: 3.2, l1: 'LA CRIATURA SE RETIRA', l2: a.hits >= 3 ? 'Las rocas la han obligado a retroceder' : 'Has sobrevivido a su presencia' };
+            banner = null;
           }
           return;
         }
@@ -3688,18 +3688,18 @@ maxRank = Math.max(maxRank, sr()); ambT -= dt; if (ambT <= 0) { ambT = rand(9, 2
         ctx.fillStyle='#000'; ctx.beginPath(); ctx.ellipse(0,0,38,92,0,0,TAU); ctx.fill();
         ctx.strokeStyle='rgba(120,220,235,.22)'; ctx.lineWidth=3; for(let i=0;i<12;i++){const ang=i*TAU/12+time*.08;ctx.beginPath();ctx.moveTo(Math.cos(ang)*125,Math.sin(ang)*80);ctx.quadraticCurveTo(Math.cos(ang)*250,Math.sin(ang)*180,Math.cos(ang)*330,Math.sin(ang)*125);ctx.stroke();}
         ctx.restore();
-        if (a.phase === 'awakening') { ctx.fillStyle='rgba(0,0,0,'+clamp(0.45+Math.sin(time*9)*.18,0,0.7)+')'; ctx.fillRect(0,0,W,H); txt('NO DEBISTE ABRIRLO',W/2,H-92,22,'#d9faff','center',12); }
+        if (a.phase === 'awakening') { ctx.fillStyle='rgba(0,0,0,'+clamp(0.45+Math.sin(time*9)*.18,0,0.7)+')'; ctx.fillRect(0,0,W,H); }
       }
       function drawAmalEncounter() {
         if (!amalEncounter) return;
         const a=amalEncounter;
-        if(a.phase==='corridor') { ctx.save(); ctx.fillStyle='rgba(0,0,0,.18)';ctx.fillRect(332,WALL,616,H-WALL*2);ctx.strokeStyle='rgba(110,190,215,.18)';ctx.lineWidth=3;for(let y=WALL+20;y<H-WALL;y+=42){ctx.beginPath();ctx.moveTo(350,y);ctx.lineTo(930,y);ctx.stroke();}ctx.restore(); }
+        if(a.phase==='corridor') { ctx.save(); ctx.fillStyle='rgba(0,0,0,.22)';ctx.fillRect(46,46,W-92,172);ctx.fillRect(398,218,484,H-264);ctx.strokeStyle='rgba(110,190,215,.22)';ctx.lineWidth=4;ctx.strokeRect(46,46,W-92,172);ctx.strokeRect(398,218,484,H-264);ctx.strokeStyle='rgba(110,190,215,.12)';ctx.lineWidth=2;for(let y=238;y<H-30;y+=58){ctx.beginPath();ctx.moveTo(405,y);ctx.lineTo(875,y);ctx.stroke();}ctx.restore(); }
         if(a.phase==='arena') {
           for(const rock of a.rocks){
             if(rock.fly){ctx.save();ctx.translate(rock.fly.x,rock.fly.y);ctx.rotate(rock.fly.t*9);ctx.fillStyle='#8b8274';ctx.strokeStyle='#d8d0bd';ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(-18,-13);ctx.lineTo(-5,-25);ctx.lineTo(18,-15);ctx.lineTo(23,8);ctx.lineTo(2,22);ctx.lineTo(-20,12);ctx.closePath();ctx.fill();ctx.stroke();ctx.restore();}
             else if(!rock.used){ctx.save();ctx.translate(rock.x,rock.y);ctx.rotate(Math.sin(time*1.5+rock.x)*.08);ctx.fillStyle='#716e68';ctx.strokeStyle='#b8b3a8';ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(-23,-14);ctx.lineTo(-8,-30);ctx.lineTo(18,-22);ctx.lineTo(27,7);ctx.lineTo(4,25);ctx.lineTo(-24,13);ctx.closePath();ctx.fill();ctx.stroke();ctx.restore();if(dist(P.x,P.y,rock.x,rock.y)<90)txt('[R] LANZAR ROCA',rock.x,rock.y-40,12,'#e7dfce','center',6);}
           }
-          panel( W/2-150, 16, 300, 42 ); txt('AHUYENTA A LA AMALGAMA',W/2,34,13,'#c8f5ff','center',7); txt('ROCAS '+a.hits+'/3  ·  RESISTE '+Math.ceil(a.survive)+'s',W/2,49,10,'#dcebf4','center');
+          
         }
       }
       function drawWorld() {
