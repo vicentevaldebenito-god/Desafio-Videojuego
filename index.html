@@ -1264,7 +1264,10 @@
           // Al morir el jefe, elimina sus refuerzos y proyectiles restantes.
           for (const add of enemies) if (add !== e) add.dead = true;
           waveQueue.length = 0;
-          ebullets.length = 0;
+          // Limpieza total al morir un jefe: evita que proyectiles reflejados del Eco/parry queden flotando en la sala siguiente.
+          bullets.length = 0; ebullets.length = 0;
+          if (typeof parryT !== 'undefined') parryT = 0;
+          if (typeof parryCd !== 'undefined') parryCd = 0;
           boomFx(e.x, e.y, 220, col, '#3bd98a'); shake(24); hitstop = 0.3; AudioSys.sfx('boom', true); AudioSys.sfx('kill');
           for (let i = 0; i < 4; i++) setTimeout(() => { if (state === 'playing') { boomFx(e.x + rand(-60, 60), e.y + rand(-60, 60), 100, col, '#3bd98a'); shake(14); AudioSys.sfx('boom', true); } }, i * 220);
           for (let i = 0; i < 6; i++) pickups.push({ x: e.x + rand(-40, 40), y: e.y + rand(-40, 40), vx: rand(-120, 120), vy: rand(-120, 120), heal: 12, t: 0 });
@@ -1653,7 +1656,13 @@
             } else if (e.state === 'desp_line_dash') {
               e.face = e.despDir > 0 ? 0 : Math.PI; e.vis=e.face; e.despSwim=(e.despSwim||0)+dt*26;
               const oldX = e.x; e.x += e.despDir * 1500 * dt; e.y = e.despY;
-              if (target === P && Math.abs(target.y - e.despY) < target.r + e.r * 0.45 && target.x >= Math.min(oldX,e.x)-target.r && target.x <= Math.max(oldX,e.x)+target.r && e.hitCd <= 0) { hurtEnemyTargetPlayer(target, 32, 0); e.hitCd = 0.7; }
+              // Barrido de colisión continuo: cubre toda la trayectoria del dash, incluso si cruza muchos píxeles en un frame.
+              const laneHalf = Math.max(target.r + 30, e.r * 0.62);
+              const crossedX = target.x + target.r >= Math.min(oldX,e.x) && target.x - target.r <= Math.max(oldX,e.x);
+              const insideLane = Math.abs(target.y - e.despY) <= laneHalf;
+              if (target === P && crossedX && insideLane && e.hitCd <= 0) {
+                hurtEnemyTargetPlayer(target, 32, e.despDir > 0 ? Math.PI : 0); e.hitCd = 0.7;
+              }
               const reachedEdge = e.despDir > 0 ? e.x >= arenaB.r - 8 : e.x <= arenaB.l + 8;
               if (reachedEdge) { e.x = e.despDir > 0 ? arenaB.r - 8 : arenaB.l + 8; e.vx=0; e.vy=0; e.despStage++; if (e.despStage < 3) { e.state = 'desp_line_telegraph'; e.despTimer = 0; } else { e.state = 'desp_algae'; e.despTimer = 0; e.escape = 0; } }
             } else if (e.state === 'desp_algae') {
