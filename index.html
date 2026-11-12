@@ -1645,8 +1645,16 @@
               e.despTimer += dt;
               if (target === P && !P.dead) {
                 P.rootT = Math.max(P.rootT || 0, 0.12);
-                if (keys.Space || pressed.Space) e.escape = Math.min(1, (e.escape || 0) + dt * 1.15);
-                else e.escape = Math.max(0, (e.escape || 0) - dt * 0.12);
+                if (pressed.Space) {
+                  e.escape = Math.min(1, (e.escape || 0) + 0.075);
+                  e.mashFlash = 0.2;
+                  e.mashPulse = (e.mashPulse || 0) + 1;
+                } else if (keys.Space) {
+                  e.escape = Math.min(1, (e.escape || 0) + dt * 0.55);
+                } else {
+                  e.escape = Math.max(0, (e.escape || 0) - dt * 0.12);
+                }
+                e.mashFlash = Math.max(0, (e.mashFlash || 0) - dt);
               }
               if ((e.escape || 0) >= 1) { if (target === P) P.rootT = 0; finishBossDesperationRound(e); }
               else if (e.despTimer >= 4.5) { if (target === P) { P.rootT = 0; hurtEnemyTargetPlayer(target, target.maxHp * 0.8, 0); } finishBossDesperationRound(e); }
@@ -3335,7 +3343,36 @@ maxRank = Math.max(maxRank, sr()); ambT -= dt; if (ambT <= 0) { ambT = rand(9, 2
         if (e.boss && e.state === 'desp_line_telegraph') {ctx.save();ctx.globalCompositeOperation='lighter';ctx.fillStyle='rgba(255,25,40,0.16)';ctx.fillRect(WALL,e.despY-24,W-2*WALL,48);ctx.strokeStyle='rgba(255,45,55,0.95)';ctx.lineWidth=4;ctx.setLineDash([18,10]);ctx.beginPath();ctx.moveTo(WALL,e.despY);ctx.lineTo(W-WALL,e.despY);ctx.stroke();ctx.setLineDash([]);ctx.restore();}
         if (e.boss && e.state === 'desp_chase') {ctx.save();ctx.globalCompositeOperation='lighter';ctx.strokeStyle='rgba(255,45,55,0.9)';ctx.lineWidth=4;ctx.setLineDash([8,8]);ctx.beginPath();ctx.arc(P.x,P.y,64+Math.sin(time*8)*9,0,TAU);ctx.stroke();ctx.setLineDash([]);ctx.strokeStyle='rgba(255,35,45,0.42)';ctx.lineWidth=22;ctx.beginPath();ctx.moveTo(e.x,e.y);ctx.lineTo(P.x,P.y);ctx.stroke();ctx.restore();}
         if (e.boss && e.state === 'desp_line_dash') {ctx.save();ctx.globalCompositeOperation='lighter';ctx.fillStyle='rgba(255,25,40,0.2)';ctx.fillRect(WALL,e.despY-30,W-2*WALL,60);ctx.strokeStyle='rgba(255,45,55,0.95)';ctx.lineWidth=4;ctx.setLineDash([14,8]);ctx.beginPath();ctx.moveTo(WALL,e.despY);ctx.lineTo(W-WALL,e.despY);ctx.stroke();ctx.setLineDash([]);ctx.restore();}
-        if (e.boss && e.state === 'desp_algae') {ctx.save();ctx.globalCompositeOperation='lighter';ctx.strokeStyle='rgba(255,35,45,0.85)';ctx.lineWidth=5;ctx.setLineDash([10,7]);ctx.beginPath();ctx.arc(P.x,P.y,78,0,TAU);ctx.stroke();ctx.setLineDash([]);ctx.fillStyle='rgba(255,35,45,0.95)';ctx.font='bold 18px Consolas';ctx.textAlign='center';ctx.fillText('¡SPAMEA ESPACIO!',P.x,P.y-55);ctx.restore();}
+        if (e.boss && e.state === 'desp_algae') {
+          // Las algas ya están enrolladas alrededor del jugador; el tiburón solo mantiene la presión.
+          ctx.save(); ctx.translate(P.x,P.y); ctx.globalCompositeOperation='source-over';
+          const wriggle=Math.sin(time*13)*5, wrap=0.55+0.45*Math.sin(time*8);
+          ctx.lineCap='round'; ctx.lineJoin='round';
+          for(let vine=0;vine<5;vine++){
+            const side=vine%2?1:-1, yy=-P.r*.72+vine*P.r*.36;
+            ctx.strokeStyle=vine%2?'#315f48':'#477d52'; ctx.lineWidth=6+wrap*2;
+            ctx.beginPath(); ctx.moveTo(-P.r*1.25,yy+side*8);
+            ctx.bezierCurveTo(-P.r*.55,yy- side*24+wriggle, P.r*.45,yy+side*30-wriggle, P.r*1.22,yy-side*7);
+            ctx.stroke(); ctx.strokeStyle='rgba(151,207,111,.72)'; ctx.lineWidth=1.8; ctx.stroke();
+          }
+          ctx.strokeStyle='rgba(255,206,76,.95)'; ctx.lineWidth=3; ctx.globalCompositeOperation='lighter';
+          const flash=e.mashFlash||0;
+          for(let spark=0;spark<7;spark++){
+            const a=(spark/7)*TAU+(e.mashPulse||0)*.7, rr=P.r*(1.25+flash*1.5);
+            const sx=Math.cos(a)*rr, sy=Math.sin(a)*rr;
+            ctx.globalAlpha=flash>0?Math.min(1,flash*7):.22;
+            ctx.beginPath();ctx.moveTo(sx,sy);ctx.lineTo(sx+Math.cos(a)* (8+flash*35),sy+Math.sin(a)*(8+flash*35));ctx.stroke();
+          }
+          ctx.globalAlpha=1; ctx.restore();
+          ctx.save(); ctx.globalCompositeOperation='lighter';
+          ctx.fillStyle='rgba(255,214,91,.95)'; ctx.font='bold 17px Consolas'; ctx.textAlign='center';
+          ctx.fillText('¡PULSA ESPACIO REPETIDAMENTE!',P.x,P.y-P.r-42);
+          const barW=116, prog=Math.max(0,Math.min(1,e.escape||0));
+          ctx.fillStyle='rgba(12,20,25,.8)';ctx.fillRect(P.x-barW/2,P.y+P.r+23,barW,9);
+          ctx.fillStyle='#ffd45c';ctx.fillRect(P.x-barW/2,P.y+P.r+23,barW*prog,9);
+          ctx.strokeStyle='rgba(255,230,150,.9)';ctx.lineWidth=1.5;ctx.strokeRect(P.x-barW/2,P.y+P.r+23,barW,9);
+          ctx.restore();
+        }
         if (e.boss && e.state === 'desp_inhale') {ctx.save();ctx.globalCompositeOperation='lighter';ctx.strokeStyle='rgba(255,35,45,0.85)';ctx.lineWidth=5;ctx.setLineDash([12,8]);ctx.beginPath();ctx.arc(e.x,e.y,Math.max(85,Math.min(360,110+e.despTimer*55)),0,TAU);ctx.stroke();ctx.setLineDash([]);ctx.strokeStyle='rgba(255,45,55,0.58)';ctx.lineWidth=18;ctx.beginPath();ctx.moveTo(P.x,P.y);ctx.lineTo(e.x,e.y);ctx.stroke();ctx.fillStyle='rgba(255,35,45,0.95)';ctx.font='bold 16px Consolas';ctx.textAlign='center';ctx.fillText('¡DASHEA PARA ESCAPAR!',P.x,P.y-42);ctx.restore();}
         if (e.boss && e.state === 'desp_lights') {ctx.save();ctx.globalCompositeOperation='lighter';ctx.strokeStyle='rgba(255,45,55,0.7)';ctx.lineWidth=3;ctx.setLineDash([7,7]);ctx.beginPath();ctx.arc(W/2,H/2,390,0,TAU);ctx.stroke();ctx.setLineDash([]);ctx.fillStyle='rgba(255,45,55,0.95)';ctx.font='bold 15px Consolas';ctx.textAlign='center';ctx.fillText('ENCUENTRA LA LUZ MÁS BRILLANTE · ' +(e.despCycles||0)+'/4',W/2,72);ctx.restore();}
         // telegrafías
