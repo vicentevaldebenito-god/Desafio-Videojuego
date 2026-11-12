@@ -125,7 +125,7 @@
          --------------------------------------------------------------------- */
       const keys = {}, pressed = {};
       const mouse = { x: W / 2, y: H / 2, l: false, r: false, lp: false, rp: false };
-      const touchPad = { moveId: null, specialId: null, dashId: null, interactId: null, joyX: 0, joyY: 0, active: false };
+      const touchPad = { moveId: null, specialId: null, dashId: null, interactId: null, weaponId: null, secondaryId: null, joyX: 0, joyY: 0, active: false };
       const amalCamera = { x: W / 2, y: H / 2, zoom: 0.62 };
       function amalCameraActive() { return !!(amalEncounter && ['corridor','awakening','materialize','arena'].includes(amalEncounter.phase)); }
       function amalBounds(){return {l:W/2-W*1.5,r:W/2+W*1.5,t:H/2-H*1.5,b:H/2+H*1.5};}
@@ -205,10 +205,12 @@
         circle(970,590,51,'rgba(255,177,59,.18)','rgba(255,177,59,.85)');
         circle(1090,590,57,'rgba(125,255,106,.18)','rgba(125,255,106,.8)');
         circle(1180,470,63,'rgba(46,230,255,.24)','rgba(46,230,255,.95)'); ctx.beginPath(); ctx.arc(1180,470,54,0,TAU); ctx.strokeStyle='rgba(184,244,255,.55)'; ctx.lineWidth=2; ctx.stroke();
+        circle(970,455,43,'rgba(105,170,255,.18)','rgba(105,190,255,.85)'); circle(1080,455,43,'rgba(255,105,190,.18)','rgba(255,145,210,.85)');
         ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.font='bold 15px Arial';
         ctx.fillStyle='#ffd08a'; ctx.fillText('DASH',970,590);
         ctx.fillStyle='#baffc8'; ctx.fillText('ESPECIAL',1090,590);
-        ctx.fillStyle='#b8f4ff'; ctx.font='bold 25px Arial'; ctx.fillText('R',1180,462); ctx.font='bold 11px Arial'; ctx.fillText('INTERACTUAR',1180,491);
+        ctx.fillStyle='#b8f4ff'; ctx.font='bold 25px Arial'; ctx.fillText(state==='inv'?'CERRAR':'R',1180,462); ctx.font='bold 11px Arial'; ctx.fillText(state==='inv'?'INVENTARIO':'INTERACTUAR',1180,491);
+        ctx.fillStyle='#b8dfff';ctx.font='bold 12px Arial';ctx.fillText('ARMA',970,455);ctx.fillStyle='#ffb5dc';ctx.fillText('SEC.',1080,455);
         ctx.fillStyle='rgba(180,225,245,.72)'; ctx.font='12px Arial'; ctx.fillText('MOVER',142,682);
         ctx.restore();
       }
@@ -236,6 +238,8 @@
           } else { mouse.x=p.x; mouse.y=p.y; mouse.lp=true; }
         } else if (state === 'playing' && p.x >= 1105 && p.x <= 1178 && p.y < 88) {
           if (!MP.connected || MP.isHost) state='paused';
+        } else if (state === 'inv' && p.x >= 1117 && p.x <= 1243 && p.y >= 407 && p.y <= 533) {
+          pressed.Tab = true;
         } else if (state === 'paused' && p.y >= 400 && p.y <= 500) {
           if (p.x >= 370 && p.x <= 630) { if (!MP.connected || MP.isHost) state='playing'; }
           else if (p.x >= 650 && p.x <= 920) {
@@ -255,6 +259,10 @@
           touchPad.moveId = e.pointerId; updateTouchMove(e);
         } else if (p.x > 900 && p.x <= 1035 && p.y > 520 && touchPad.dashId === null) {
           touchPad.dashId = e.pointerId; pressed.Space = true;
+        } else if (p.x >= 925 && p.x <= 1015 && p.y >= 410 && p.y <= 500 && touchPad.weaponId === null) {
+          touchPad.weaponId=e.pointerId; pressed.Digit1=true;
+        } else if (p.x >= 1035 && p.x <= 1125 && p.y >= 410 && p.y <= 500 && touchPad.secondaryId === null) {
+          touchPad.secondaryId=e.pointerId; mouse.r=true; mouse.rp=true; pressed.KeyQ=true;
         } else if (p.x >= 1033 && p.x <= 1147 && p.y >= 533 && p.y <= 647 && touchPad.specialId === null) {
           touchPad.specialId = e.pointerId; pressed.KeyF = true;
         } else if (p.x >= 1117 && p.x <= 1243 && p.y >= 407 && p.y <= 533 && touchPad.interactId === null) {
@@ -281,6 +289,8 @@
         if (touchPad.specialId === e.pointerId) { touchPad.specialId = null; }
         if (touchPad.dashId === e.pointerId) touchPad.dashId = null;
         if (touchPad.interactId === e.pointerId) touchPad.interactId = null;
+        if (touchPad.weaponId === e.pointerId) touchPad.weaponId=null;
+        if (touchPad.secondaryId === e.pointerId) { touchPad.secondaryId=null; mouse.r=false; }
       };
       canvas.addEventListener('pointerup', endTouchPointer);
       canvas.addEventListener('pointercancel', endTouchPointer);
@@ -325,7 +335,7 @@
       canvas.addEventListener('wheel', e => { e.preventDefault(); wheelDir = Math.sign(e.deltaY); }, { passive: false });
       window.addEventListener('blur', () => {
         for (const k in keys) keys[k] = false;
-        clearTouchMove(); touchPad.specialId = touchPad.dashId = touchPad.interactId = null;
+        clearTouchMove(); touchPad.specialId = touchPad.dashId = touchPad.interactId = touchPad.weaponId = touchPad.secondaryId = null;
         mouse.l = mouse.r = false;
         if (state === 'playing' && (!MP || !MP.connected || MP.isHost)) state = 'paused';
       });
@@ -2094,7 +2104,7 @@
         { id: 's_luck', k: 'luck', name: 'TRÉBOL ABISAL', label: 'Suerte de rareza', base: 0.25, art: 'flarex', icon: 'sonar' },
         { id: 's_econ', k: 'econ', name: 'ECONOMÍA ABISAL', label: 'Interés por sala', base: 0.05, art: 'cable', icon: 'drop' }
       ];
-      const ADD = { ls: 1, heal: 1, econ: 1, luck: 1 }, STAT_CAPS = { dmg: 2, rate: 1.8, spd: 1.5, ls: 0.15, heal: 0.25, xp: 1.5, size: 1.5, luck: 1, econ: 0.5 }, MAX_UPGRADES = 18, MAX_ORGANS = 100, RC4 = ['#8fb8d8', '#4aa8ff', '#c46bff', '#ffb13b'];
+      const ADD = { ls: 1, heal: 1, econ: 1, luck: 1 }, STAT_CAPS = { dmg: 2, rate: 1.8, spd: 1.5, ls: 0.15, heal: 0.25, xp: 1.5, size: 1.5, luck: 1, econ: 0.5 }, MAX_UPGRADES = 18, MAX_ORGANS = Number.MAX_SAFE_INTEGER, MAX_ECON_BONUS = 100, RC4 = ['#8fb8d8', '#4aa8ff', '#c46bff', '#ffb13b'];
       function statNew(st, rar, cur) { return Math.min(STAT_CAPS[st.k] || 2, cur + st.base * [1, 1.35, 1.8, 2.5][rar]); }
       function statCard(st) {
         const r = Math.random() / (1 + Math.min(0.5, P.st.luck) * 0.5 + Math.min(8, pity) * 0.015), rar = r < 0.00002 ? 3 : r < 0.0012 ? 2 : r < 0.018 ? 1 : 0, cur = P.st[st.k], nv = statNew(st, rar, cur), f = v => ADD[st.k] ? Math.round(v * 100) + '%' : 'x' + v.toFixed(2);
@@ -2676,7 +2686,7 @@
           if (a.boss) { a.boss.y -= 170 * dt; a.boss.x += Math.sin(time * 2) * 35 * dt; }
           if (a.timer >= 4.5) {
             enemies = []; amalEncounter = null; rs = 'cleared'; cell.cleared = true; doorOpen = 1;
-            organs = Math.min(MAX_ORGANS, Math.round((organs + 7) * (1 + Math.min(0.5, P.st.econ))));
+            const amalBaseOrgans=7, amalInterest=Math.min(MAX_ECON_BONUS,Math.round(amalBaseOrgans*Math.min(0.5,P.st.econ))); organs += amalBaseOrgans + amalInterest;
             P.hp = Math.min(P.maxHp, P.hp + Math.round(P.maxHp * (0.1 + P.st.heal)));
             exitPortal = { x: W / 2, y: H / 2 }; revealSecrets(); saveMeta(); AudioSys.sfx('win');
             banner = { t: 3, max: 3, l1: 'HAS SOBREVIVIDO A LA AMALGAMA', l2: 'La entidad sigue viva... en algún lugar.' };
@@ -2701,7 +2711,7 @@
             enemies = [];
             if (waveQueue.length) spawnWave();
             else {
-              rs = 'cleared'; cell.cleared = true; organs = Math.min(MAX_ORGANS, Math.round((organs + (2 + (cell.type === 'boss' ? 5 : 0)) * (1 + 0.5 * style / 100)) * (1 + Math.min(0.5, P.st.econ)))); addStyle(20, 'SALA');
+              rs = 'cleared'; cell.cleared = true; const roomBase = Math.round((2 + (cell.type === 'boss' ? 5 : 0)) * (1 + 0.5 * style / 100)); const interestBonus = Math.min(MAX_ECON_BONUS, Math.round(roomBase * Math.min(0.5, P.st.econ))); organs += roomBase + interestBonus; addStyle(20, 'SALA');
               banner = { t: 2, max: 2, l1: cell.type === 'boss' ? 'ABISMO ' + floorN + ' SUPERADO' : 'AGUAS DESPEJADAS', l2: 'Las compuertas ceden' };
               P.hp = Math.min(P.maxHp, P.hp + Math.round(P.maxHp * (0.1 + P.st.heal)));
               if (cell.type === 'boss') exitPortal = { x: W / 2, y: H / 2 };
@@ -3059,7 +3069,7 @@ maxRank = Math.max(maxRank, sr()); ambT -= dt; if (ambT <= 0) { ambT = rand(9, 2
         if (MP && MP.connected && !MP.isHost && MP.sharedLocked &&
             !['upgrade','class','inv'].includes(state)) return;
         time += dt;
-        organs = clamp(organs, 0, MAX_ORGANS);
+        organs = Math.max(0, Number(organs)||0);
         if (pressed.KeyM) AudioSys.toggleMute();
         for (const m of motes) { m.x += Math.sin(time * m.sp + m.ph) * 8 * dt; m.y -= m.v * dt; if (m.y < -10) { m.y = H + 10; m.x = rand(0, W); } }
         switch (state) {
