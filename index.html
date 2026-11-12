@@ -2594,7 +2594,7 @@
         if (a.phase === 'awakening') {
           if (a.timer >= 5.2) {
             a.phase = 'materialize'; a.timer = 0; a.eyeClose = 1; a.materialize = 0;
-            obstacles.push({ x: 350, y: WALL + 145, w: 580, h: 54 });
+            obstacles.push({ x: WALL + 232, y: WALL + 145, w: W - WALL * 2 - 464, h: 54 });
             P.x = W / 2; P.y = H - WALL - 100; P.vx = P.vy = 0; P.iframes = 2;
             shake(34); hitstop = 0.25; AudioSys.sfx('boom');
           }
