@@ -805,11 +805,11 @@
         fade = 1;
         if (amalFinalRoom && !cell.cleared) {
           obstacles = [
-            { x: 300, y: WALL + 150, w: 42, h: H - WALL - 150 },
-            { x: W - 342, y: WALL + 150, w: 42, h: H - WALL - 150 }
+            { x: WALL + 190, y: WALL, w: 42, h: H - WALL * 2 },
+            { x: W - WALL - 232, y: WALL, w: 42, h: H - WALL * 2 }
           ];
           P.x = W / 2; P.y = H - WALL - 54; P.iframes = 1.5;
-          chest = { x: W / 2, y: WALL + 92, open: false, amal: true };
+          chest = { x: W / 2, y: WALL + 92, open: false, amal: true }; amalForm = 1;
           amalEncounter = { phase: 'corridor', timer: 0, rocks: [], hits: 0, survive: 150, boss: null, eyePulse: 0, formChanges: 0, rockReady: false, nextForm: 13, eyeClose: 0, materialize: 0, rockCycle: 0 };
           rs = 'fight'; introDark = 0;
           banner = { t: 2, max: 2, l1: 'EL UMBRAL', l2: '' };
@@ -1529,12 +1529,10 @@
         if (e.amalStalker) {
           if (!amalEncounter || amalEncounter.phase !== 'arena') return;
           e.amalStalker = false;
-          const oldFloor = floorN;
-          floorN = 8;
           const hp = e.hp, maxHp = e.maxHp;
           e.hp = e.maxHp = 1e12; e.phaseInvuln = 0; e.despLock = false; e.despFinished = true;
           updateBoss(e, dt, P);
-          e.hp = hp; e.maxHp = maxHp; floorN = oldFloor; e.amalStalker = true;
+          e.hp = hp; e.maxHp = maxHp; e.amalStalker = true;
           e.amalMorphT = Math.max(0,(e.amalMorphT||0)-dt); e.r = 105;
           return;
           const a = Math.atan2(P.y - e.y, P.x - e.x), d = dist(P.x, P.y, e.x, e.y);
@@ -2611,7 +2609,7 @@
         if (a.phase === 'arena') {
           a.survive -= dt;
           a.nextForm -= dt;
-          if (a.nextForm <= 0 && a.boss) { a.formChanges++; a.boss.amalForm = a.boss.amalForm % 7 + 1; a.boss.amalMorphT = 1.5; a.nextForm = 13; shake(15); ring(a.boss.x,a.boss.y,300,'#8defff',0.8,7); AudioSys.sfx('roar'); if (a.formChanges % 3 === 0) { const rx = clamp(P.x + (P.x < W/2 ? 260 : -260), WALL + 80, W - WALL - 80); a.rocks.push({ x: rx, y: H - WALL - 42, used: false, falling: true, fallT: 0, cycle: ++a.rockCycle }); shake(12); } }
+          if (a.nextForm <= 0 && a.boss) { a.formChanges++; amalForm = amalForm % 7 + 1; a.boss.amalMorphT = 1.5; a.nextForm = 13; shake(15); ring(a.boss.x,a.boss.y,300,'#8defff',0.8,7); AudioSys.sfx('roar'); if (a.formChanges % 3 === 0) { const rx = clamp(P.x + (P.x < W/2 ? 260 : -260), WALL + 80, W - WALL - 80); a.rocks.push({ x: rx, y: H - WALL - 42, used: false, falling: true, fallT: 0, cycle: ++a.rockCycle }); shake(12); } }
           for (const rock of a.rocks) if (rock.falling) { rock.fallT = (rock.fallT || 0) + dt; if (rock.fallT >= 0.8) { rock.falling = false; rock.y = H - WALL - 42; shake(10); AudioSys.sfx('boom'); } }
           if (pressed.KeyR) {
             const rock = a.rocks.find(q => !q.used && dist(P.x, P.y, q.x, q.y) < 76);
@@ -3688,7 +3686,7 @@ maxRank = Math.max(maxRank, sr()); ambT -= dt; if (ambT <= 0) { ambT = rand(9, 2
       }
 
       function drawAmalBackdrop() {
-        if (!amalEncounter || !['awakening','arena','retreat'].includes(amalEncounter.phase)) return;
+        if (!amalEncounter || !['awakening','materialize'].includes(amalEncounter.phase)) return;
         const a = amalEncounter, cx = W * 0.5, cy = H * 0.36;
         ctx.save(); ctx.globalAlpha = a.phase === 'awakening' ? Math.min(1, a.timer / 1.2) : 0.48 + 0.12 * Math.sin(time * 1.7);
         const g = ctx.createRadialGradient(cx, cy, 10, cx, cy, 440); g.addColorStop(0, 'rgba(20,55,75,.05)'); g.addColorStop(0.72, 'rgba(5,13,24,.75)'); g.addColorStop(1, 'rgba(0,0,0,.98)'); ctx.fillStyle = g; ctx.fillRect(0,0,W,H);
@@ -3706,7 +3704,7 @@ maxRank = Math.max(maxRank, sr()); ambT -= dt; if (ambT <= 0) { ambT = rand(9, 2
       function drawAmalEncounter() {
         if (!amalEncounter) return;
         const a=amalEncounter;
-        if(a.phase==='corridor') { ctx.save(); ctx.fillStyle='rgba(0,0,0,.25)';ctx.fillRect(46,46,W-92,H-92);ctx.fillStyle='rgba(12,24,35,.28)';ctx.fillRect(342,WALL+150,596,H-WALL-150);ctx.strokeStyle='rgba(110,190,215,.25)';ctx.lineWidth=5;ctx.beginPath();ctx.moveTo(342,WALL+150);ctx.lineTo(342,H-WALL);ctx.moveTo(938,WALL+150);ctx.lineTo(938,H-WALL);ctx.stroke();ctx.restore(); }
+        if(a.phase==='corridor') { ctx.save();ctx.fillStyle='rgba(0,0,0,.24)';ctx.fillRect(WALL+1,WALL+1,W-WALL*2-2,H-WALL*2-2);ctx.fillStyle='rgba(12,24,35,.38)';ctx.fillRect(WALL+232,WALL+1,W-2*WALL-464,H-WALL*2-2);ctx.strokeStyle='rgba(110,190,215,.24)';ctx.lineWidth=3;for(let y=WALL+20;y<H-WALL;y+=54){ctx.beginPath();ctx.moveTo(WALL+238,y);ctx.lineTo(W-WALL-238,y);ctx.stroke();}ctx.restore(); }
         if(a.phase==='arena') {
           for(const rock of a.rocks){
             if(rock.falling){ctx.save();const yy=rock.y+Math.min(260,(rock.fallT||0)*320);ctx.translate(rock.x,yy);ctx.rotate(time*2);ctx.fillStyle='#716e68';ctx.strokeStyle='#b8b3a8';ctx.lineWidth=4;ctx.beginPath();ctx.moveTo(-25,-16);ctx.lineTo(-8,-34);ctx.lineTo(21,-24);ctx.lineTo(29,9);ctx.lineTo(4,27);ctx.lineTo(-25,13);ctx.closePath();ctx.fill();ctx.stroke();ctx.restore();}
