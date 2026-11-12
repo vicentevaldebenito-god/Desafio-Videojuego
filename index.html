@@ -2613,17 +2613,20 @@
       ];
       function updateClass() {
         for (let i = 0; i < 2; i++) if (pressed['Digit' + (i + 1)] || (mouse.lp && mouse.x > 200 + i * 450 && mouse.x < 620 + i * 450 && mouse.y > 200 && mouse.y < 560)) {
-          P.path = i ? 'B' : 'A'; P.tier = level >= 20 ? 3 : level >= 10 ? 2 : 1;
+          const previousPath = P.path;
+          P.path = i ? 'B' : 'A';
+          P.tier = level >= 20 ? 3 : level >= 10 ? 2 : 1;
           if (MP && MP.connected && !MP.isHost) {
             MP.localClassDone = true; MP.localClassOpen = false;
             MP.localClassMilestones = new Set([10,20].filter(v => level >= v));
           }
           state = 'playing'; AudioSys.sfx('upgrade');
-          banner = { t: 2.6, max: 2.6, l1: 'RUTA ELEGIDA', l2: CPATH[P.char][i].n + ' · RANGO ' + P.tier }; return;
+          const branchLabel = previousPath && previousPath !== P.path ? ' · RAMA ALTERNATIVA' : previousPath ? ' · RAMA REFORZADA' : ' · RAMA INICIAL';
+          banner = { t: 3.0, max: 3.0, l1: level >= 20 ? 'REBRANCH · NIVEL 20' : level >= 10 ? 'REBRANCH · NIVEL 10' : 'RUTA ELEGIDA', l2: CPATH[P.char][i].n + branchLabel }; return;
         }
       }
       function drawClass() {
-        dim(0.9); const c = CHARS[P.char]; txt('MEJORA DE CLASE · ' + c.n, W / 2, 110, 34, c.col, 'center', 14); txt('Elige UNA ruta · Rango II en nivel 10 · Rango III en nivel 20 · 1 / 2 o clic', W / 2, 146, 15, '#cfe0f0', 'center');
+        dim(0.9); const c = CHARS[P.char]; txt('MEJORA DE CLASE · ' + c.n, W / 2, 110, 34, c.col, 'center', 14); txt(level >= 20 ? 'NIVEL 20 · ELIGE UNA NUEVA RAMA DE TU CLASE · 1 / 2 o clic' : level >= 10 ? 'NIVEL 10 · ELIGE UNA NUEVA RAMA DE TU CLASE · 1 / 2 o clic' : 'NIVEL 5 · ELIGE TU RAMA INICIAL · PODRÁS REORIENTARLA EN NIVEL 10 Y 20', W / 2, 146, 15, '#cfe0f0', 'center');
         CPATH[P.char].forEach((p, i) => { const x = 200 + i * 450, hov = mouse.x > x && mouse.x < x + 420 && mouse.y > 200 && mouse.y < 560; ctx.fillStyle = 'rgba(8,24,40,.95)'; ctx.fillRect(x, 200, 420, 360); ctx.strokeStyle = c.col; ctx.lineWidth = hov ? 4 : 2; ctx.strokeRect(x, 200, 420, 360); ctx.fillStyle = c.col + '22'; ctx.fillRect(x, 200, 420, 90); txt('RUTA ' + (i ? 'B' : 'A') + '  [' + (i + 1) + ']', x + 20, 236, 14, '#8fb8d8', 'left'); txt(p.n, x + 20, 274, 26, c.col, 'left', 8); wrap(p.d, 380, 17).forEach((l, k) => txt(l, x + 20, 340 + k * 26, 17, '#e6f2ff', 'left')); });
       }
       function updateAmalEncounter(dt) {
@@ -3017,12 +3020,9 @@
 maxRank = Math.max(maxRank, sr()); ambT -= dt; if (ambT <= 0) { ambT = rand(9, 20); AudioSys.sfx(['whale', 'creak', 'drip'][Math.floor(Math.random() * 3)]); } for (const q of enemies) if (q.af === 'regen' && !q.dead) q.hp = Math.min(q.maxHp, q.hp + q.maxHp * 0.04 * dt); if (current && !P.dead) moveEntity(P, Math.cos(current.a) * current.f * dt, Math.sin(current.a) * current.f * dt, P.r); octo.happy = Math.max(0, octo.happy - dt); octo.sayT -= dt; for (const q of styleFeed) q.life -= dt; styleFeed = styleFeed.filter(q => q.life > 0); for (const q of enemies) if (q.mini || q.boss) { q.pinned = null; q.impaled = null; q.pull = false; q.stun = 0; } if ((!MP.connected || MP.isHost) && pend > 0 && !P.dead) { pend--; openUpgrades(); }
         if ((!MP.connected || MP.isHost) && cpend > 0 && state === 'playing' && !P.dead) {
           cpend--;
-          if (!P.path) { state = 'class'; AudioSys.sfx('upgrade'); }
-          else {
-            P.tier = level >= 20 ? 3 : level >= 10 ? 2 : Math.max(1, P.tier + 1);
-            banner = { t: 2.6, max: 2.6, l1: 'MEJORA DE CLASE', l2: CPATH[P.char][P.path === 'A' ? 0 : 1].n + ' · RANGO ' + P.tier };
-            AudioSys.sfx('upgrade');
-          }
+          // En los niveles 5, 10 y 20 siempre se abre una elección: permite cambiar de rama y crear builds híbridas.
+          P.tier = level >= 20 ? 3 : level >= 10 ? 2 : 1;
+          state = 'class'; AudioSys.sfx('upgrade');
         }
         if (P.invT > 0) { P.invT -= dt; P.iframes = Math.max(P.iframes, 0.1); if (P.invT <= 0) P.vulnT = 5; } if (P.vulnT > 0) P.vulnT -= dt;
         stillT = Math.hypot(P.vx, P.vy) < 8 ? stillT + dt : 0; if (chm('still') && stillT > 1.5 && P.shield < 1 + chm('still')) { P.shield++; stillT = 0; ring(P.x, P.y, 50, '#7ad7ff', 0.3, 3); AudioSys.sfx('rankup'); }
@@ -5188,8 +5188,9 @@ maxRank = Math.max(maxRank, sr()); ambT -= dt; if (ambT <= 0) { ambT = rand(9, 2
         if (!MP.isHost && P && P.path) {
           for (const milestone of [10, 20]) {
             if (previousSyncedLevel < milestone && level >= milestone && !MP.localClassMilestones.has(milestone)) {
-              MP.localClassMilestones.add(milestone); P.tier = milestone === 10 ? 2 : 3;
-              banner = { t: 2.8, max: 2.8, l1: 'MEJORA DE CLASE', l2: CPATH[P.char][P.path === 'A' ? 0 : 1].n + ' · RANGO ' + P.tier };
+              MP.localClassMilestones.add(milestone);
+              MP.localClassOpen = true; MP.localClassDone = false; P.tier = milestone === 10 ? 2 : 3;
+              banner = { t: 2.8, max: 2.8, l1: 'REBRANCH · NIVEL ' + milestone, l2: 'Elige una nueva rama de clase' };
               AudioSys.sfx('upgrade');
             }
           }
