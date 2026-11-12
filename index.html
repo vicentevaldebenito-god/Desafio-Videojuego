@@ -63,6 +63,11 @@
       ];
 
       const canvas = document.getElementById('game');
+      let amalMusic = null, amalMusicUrl = null;
+      const amalMusicInput = document.createElement('input'); amalMusicInput.type='file'; amalMusicInput.accept='audio/*'; amalMusicInput.style.display='none'; document.body.appendChild(amalMusicInput);
+      const amalMusicButton = document.createElement('button'); amalMusicButton.textContent='♫ CARGAR TEMA'; amalMusicButton.style.cssText='display:none;position:fixed;z-index:30;top:14px;right:14px;padding:10px 14px;border:1px solid #7bd8ef;background:rgba(3,18,30,.9);color:#d9f8ff;font:700 12px Arial;letter-spacing:1px;border-radius:5px;cursor:pointer'; document.body.appendChild(amalMusicButton);
+      amalMusicButton.addEventListener('click',()=>amalMusicInput.click());
+      amalMusicInput.addEventListener('change',()=>{const f=amalMusicInput.files&&amalMusicInput.files[0];if(!f)return;if(amalMusicUrl)URL.revokeObjectURL(amalMusicUrl);amalMusicUrl=URL.createObjectURL(f);if(!amalMusic){amalMusic=new Audio();amalMusic.loop=true;amalMusic.volume=.72;}amalMusic.src=amalMusicUrl;amalMusic.play().then(()=>{if(amalEncounter&&amalEncounter.phase!=='arena')amalMusic.pause();}).catch(()=>{});});
       const ctx = canvas.getContext('2d');
       const MOBILE = (('ontouchstart' in window) || navigator.maxTouchPoints > 0) &&
         (window.matchMedia('(pointer: coarse)').matches || navigator.maxTouchPoints > 0);
@@ -131,7 +136,7 @@
         const x=(e.clientX-r.left)*W/r.width,y=(e.clientY-r.top)*H/r.height; return screenToWorld(x,y);
       }
       function updateTouchMove(e) {
-        const p = touchGamePoint(e), dx = p.x - 142, dy = p.y - 578;
+        const r = canvas.getBoundingClientRect(); const p = { x:(e.clientX-r.left)*W/r.width, y:(e.clientY-r.top)*H/r.height }; const dx = p.x - 142, dy = p.y - 578;
         const len = Math.hypot(dx, dy), max = 68, k = len > max ? max / len : 1;
         touchPad.joyX = dx * k / max; touchPad.joyY = dy * k / max;
         touchPad.active = len > 8;
@@ -648,7 +653,7 @@
       function moveEntity(o, dx, dy, r) {
         const n = Math.max(1, Math.ceil(Math.hypot(dx, dy) / 12));
         let hit = false;
-        const huge = amalEncounter && amalEncounter.phase === 'arena';
+        const huge = amalCameraActive();
         const minx = huge ? W/2-W*1.5+r : WALL+r, maxx = huge ? W/2+W*1.5-r : W-WALL-r, miny = huge ? H/2-H*1.5+r : WALL+r, maxy = huge ? H/2+H*1.5-r : H-WALL-r;
         for (let i = 0; i < n; i++) {
           o.x += dx / n; o.y += dy / n;
@@ -660,7 +665,7 @@
       }
       function pointInSolid(x, y, pad) {
         pad = pad || 0;
-        const huge = amalEncounter && amalEncounter.phase === 'arena';
+        const huge = amalCameraActive();
         if (huge ? (x < W/2-W*1.5+pad || x > W/2+W*1.5-pad || y < H/2-H*1.5+pad || y > H/2+H*1.5-pad) : (x < WALL+pad || x > W-WALL-pad || y < WALL+pad || y > H-WALL-pad)) return true;
         for (const ob of obstacles) if (x > ob.x - pad && x < ob.x + ob.w + pad && y > ob.y - pad && y < ob.y + ob.h + pad) return true;
         return false;
@@ -2612,7 +2617,7 @@
           amalCamera.x=lerp(amalCamera.x,W/2,Math.min(1,dt*2)); amalCamera.y=lerp(amalCamera.y,H/2,Math.min(1,dt*2)); amalCamera.zoom=0.52;
           a.eyeClose = Math.max(0, 1 - a.timer / 1.15);
           if (a.timer >= 1.15 && !a.boss) { const b = spawnEnemy('boss', W * 0.5, -150); if (b) { b.amalStalker = true; b.r = 105; b.hp = b.maxHp = 1e12; b.spawnT = 0; b.orbit = 0; b.state = 'walk'; b.amalAttackCd = 3.5; b.amalForm = 1; b.amalDropT = 0; b.amalDropDone = false; a.boss = b; } a.materialize = 1; shake(22); AudioSys.sfx('roar'); }
-          if (a.timer >= 3.4) { a.phase = 'arena'; a.timer = 0; a.nextForm = 13; }
+          if (a.timer >= 3.4) { a.phase = 'arena'; a.timer = 0; a.nextForm = 13; if(amalMusic&&amalMusic.src){amalMusic.currentTime=0;amalMusic.play().catch(()=>{});} }
           return;
         }
         if (a.phase === 'arena') {
@@ -2650,6 +2655,7 @@
           return;
         }
         if (a.phase === 'retreat') {
+          if(amalMusic){amalMusic.pause();amalMusic.currentTime=0;}
           if (a.boss) { a.boss.y -= 170 * dt; a.boss.x += Math.sin(time * 2) * 35 * dt; }
           if (a.timer >= 4.5) {
             enemies = []; amalEncounter = null; rs = 'cleared'; cell.cleared = true; doorOpen = 1;
@@ -3735,6 +3741,7 @@ maxRank = Math.max(maxRank, sr()); ambT -= dt; if (ambT <= 0) { ambT = rand(9, 2
         }
       }
       function drawWorld() {
+        amalMusicButton.style.display = amalEncounter && ['corridor','awakening','materialize','arena'].includes(amalEncounter.phase) ? 'block' : 'none';
         const th = THEMES[floorN - 1];
         glowQ = [];
         ctx.drawImage(bgCv, 0, 0);
