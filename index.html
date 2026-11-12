@@ -1244,13 +1244,7 @@
           }
         }
         // El golpe letal final inicia una ejecución cinematográfica en vez de matar instantáneamente.
-        if (e.boss && e.despFinished && !e.finisherDone && !e.finisher && e.hp - d <= 0) {
-          e.hp = 1; e.finisher = { t: 0, duration: 1.65, sx: P.x, sy: P.y, ex: e.x, ey: e.y };
-          e.vx = e.vy = 0; e.state = 'finisher'; e.flash = 0.25;
-          bullets.length = 0; ebullets.length = 0;
-          shake(5); AudioSys.sfx('roar');
-          return d;
-        }
+        if (e.boss && e.finisher && !e.finisherDone) return 0;
         e.hp -= d; e.flash = 0.1;
         if (blocked && d > 5 && Math.random() < 0.6) { spark(e.x, e.y, 3, '#ffd23f', 260); AudioSys.sfx('hit'); }
         else AudioSys.sfx('hit');
@@ -1558,9 +1552,16 @@
         e.despCycles = (e.despCycles || 0) + 1;
         if (e.despCycles >= 3) {
           e.despFinished = true; e.despLock = false; e.hp = 1;
-          e.state = 'walk'; e.st = 1.8; e.despLights = null;
+          e.state = 'finisher'; e.st = 0; e.despLights = null;
           e.vx = 0; e.vy = 0; inkT = 0;
-          banner = { t: 3.2, max: 3.2, l1: '¡EL JEFE ESTÁ AGOTADO!', l2: 'AHORA PUEDES ACABAR CON ÉL' };
+          // Ejecución obligatoria: el jugador queda bloqueado y el disparo se realiza automáticamente.
+          if(e.boss && !e.amalStalker && !e.finisherDone){
+            e.finisher = { phase:'windup', t:0, duration:3.25, sx:P.x, sy:P.y, ex:e.x, ey:e.y };
+            bullets.length=0; ebullets.length=0;
+            banner = { t: 2.0, max: 2.0, l1: 'REMATE FINAL', l2: '...' };
+          } else {
+            banner = { t: 3.2, max: 3.2, l1: '¡EL JEFE ESTÁ AGOTADO!', l2: 'AHORA PUEDES ACABAR CON ÉL' };
+          }
           ring(e.x,e.y,260,'#ff4b55',0.8,7); AudioSys.sfx('roar');
         } else {
           e.despLock = true; e.despTimer = 0; e.despStage = 0; e.escape = 0; e.inhaleHitDone = false;
@@ -3116,6 +3117,18 @@ maxRank = Math.max(maxRank, sr()); ambT -= dt; if (ambT <= 0) { ambT = rand(9, 2
       }
 
       function update(dt) {
+        // Cinemática global: congela combate, movimiento e inputs hasta el impacto final.
+        const cinematicBoss = enemies.find(q => q.finisher && !q.finisherDone);
+        if(cinematicBoss){
+          const c=cinematicBoss.finisher; c.t+=dt;
+          if(c.t>=0.72 && c.phase==='windup'){c.phase='bullet';c.bulletT=0;AudioSys.sfx('shoot');}
+          if(c.phase==='bullet') c.bulletT=Math.min(1,(c.bulletT||0)+dt/1.85);
+          if(c.t>=3.25){
+            cinematicBoss.finisherDone=true;cinematicBoss.finisher=null;
+            cinematicBoss.hp=0;killEnemy(cinematicBoss);
+          }
+          return;
+        }
         // Atajos de interfaz antes de cualquier bloqueo de simulación.
         // Retornar en el mismo frame evita que el mismo Tab/Y abra y cierre el panel instantáneamente.
         if (pressed.KeyY && (!MP || !MP.connected)) {
@@ -3664,13 +3677,23 @@ maxRank = Math.max(maxRank, sr()); ambT -= dt; if (ambT <= 0) { ambT = rand(9, 2
       function drawBullets() {
         // Proyectil de remate: cámara lenta visual, estela y crecimiento hacia el impacto.
         for(const e of enemies) if(e.finisher){
-          const c=e.finisher, k=clamp(c.t/c.duration,0,1), ease=k*k*(3-2*k);
+          const c=e.finisher, phase=c.phase||'bullet', k=phase==='windup'?0:clamp((c.bulletT||0),0,1), ease=k*k*(3-2*k);
           const x=c.sx+(c.ex-c.sx)*ease, y=c.sy+(c.ey-c.sy)*ease;
           ctx.save();ctx.globalCompositeOperation='lighter';
-          ctx.strokeStyle='rgba(125,225,255,.55)';ctx.lineWidth=7;ctx.beginPath();ctx.moveTo(x-(c.ex-c.sx)*.045,y-(c.ey-c.sy)*.045);ctx.lineTo(x,y);ctx.stroke();
-          ctx.shadowColor='#b9f5ff';ctx.shadowBlur=24;ctx.fillStyle='#ffffff';ctx.beginPath();ctx.arc(x,y,5+ease*5,0,TAU);ctx.fill();
-          ctx.fillStyle='rgba(150,225,255,.8)';ctx.beginPath();ctx.arc(x,y,10+ease*8,0,TAU);ctx.fill();ctx.restore();
-          if(k>.88){ctx.save();ctx.globalAlpha=(k-.88)/.12;ctx.fillStyle='#fff';ctx.fillRect(0,0,W,H);ctx.restore();}
+          if(phase==='windup'){
+            const pulse=.5+.5*Math.sin(time*9);ctx.strokeStyle='rgba(180,230,255,'+(.35+pulse*.4)+')';ctx.lineWidth=3;ctx.beginPath();ctx.arc(e.x,e.y,e.r+24+pulse*9,0,TAU);ctx.stroke();
+            ctx.fillStyle='rgba(3,9,18,.28)';ctx.fillRect(0,0,W,H);
+            ctx.fillStyle='#eafaff';ctx.font='bold 22px Arial';ctx.textAlign='center';ctx.fillText('DISPARO FINAL',W/2,H*.22);
+          }else{
+            // Zoom visual progresivo a la bala mientras el tiempo del combate permanece congelado.
+            const zoom=1+k*.85, bx=P.x+(x-P.x)*ease;
+            ctx.translate(bx, y);ctx.scale(zoom,zoom);
+            ctx.strokeStyle='rgba(125,225,255,.72)';ctx.lineWidth=7;ctx.beginPath();ctx.moveTo(-30,8);ctx.lineTo(0,0);ctx.stroke();
+            ctx.shadowColor='#b9f5ff';ctx.shadowBlur=28;ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(0,0,6,0,TAU);ctx.fill();
+            ctx.fillStyle='rgba(150,225,255,.8)';ctx.beginPath();ctx.arc(0,0,13,0,TAU);ctx.fill();
+          }
+          ctx.restore();
+          if(k>.94){ctx.save();ctx.globalAlpha=(k-.94)/.06;ctx.fillStyle='#fff';ctx.fillRect(0,0,W,H);ctx.restore();}
         }
         for (const b of bullets) {
           if (b.type === 'harpoon') {
