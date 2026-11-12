@@ -763,7 +763,8 @@
       function speedMult() { return (1 + adrenBoost() * 0.6) * (1 + 0.15 * chm('swift')) * (P.stagger > 0 ? 0.3 : 1) * P.st.spd * (1 + 0.03 * chm('streak') * streak) * (P.char === 3 && P.path === 'A' ? Math.pow(0.88, P.tier) : 1); }
       function reloadMult() { return (1 + adrenBoost() * 1.8) * (1 + 0.35 * chm('quick')) * P.st.rate; }
 
-      function newRun() { newRun0(); applyPerks(); applyChar(); }
+      function newRun() { newRun0(); applyPerks(); applyChar(); applyDifficulty(); }
+      function applyDifficulty() { const factor = 1 - 0.1 * clamp(Number(cfg.pres) || 0, 0, 5); P.maxHp = Math.max(30, P.maxHp * factor); P.hp = Math.min(P.hp, P.maxHp); P.st.dmg *= factor; P.st.spd *= factor; P.st.xp *= factor; }
       function newRun0() {
         floorN = 1; roomN = 1;
         const mpGuestWaitingForWorld = MP && MP.connected && !MP.isHost;
@@ -818,16 +819,16 @@
       function spawnEnemy(type, x, y) {
         if (MP && MP.connected && !MP.isHost) return null;
         const base = ET[type];
-        const sc = (1 + 0.2 * (floorN - 1) + 0.04 * (roomN - 1)) * Math.pow(1.45, loop) * (1 + 0.15 * cfg.pres);
+        const sc = (1 + 0.2 * (floorN - 1) + 0.04 * (roomN - 1)) * Math.pow(1.45, loop) * (1 + 0.2 * cfg.pres);
         const mpCount = MP && MP.connected ? clamp(Number(MP.players) || 1, 1, 4) : 1;
         const enemyHpMultiplier = [1, 2, 3, 4][mpCount - 1];
         const floorBuff = floorN === 7 ? 1.5 : floorN >= 8 ? 2.25 : 1;
-        const hp = (type === 'boss' ? BOSS_HP[floorN - 1] * Math.pow(1.45, loop) * (1 + 0.15 * cfg.pres) : base.hp * sc * floorBuff) * enemyHpMultiplier;
+        const hp = (type === 'boss' ? BOSS_HP[floorN - 1] * Math.pow(1.45, loop) * (1 + 0.2 * cfg.pres) : base.hp * sc * floorBuff) * enemyHpMultiplier;
         const e = {
           netId: crypto.randomUUID(),
           type, x, y, vx: 0, vy: 0, r: base.r, hp, maxHp: hp, speed: base.speed * (1 + 0.05 * (floorN - 1)) * (type === 'boss' ? 1 : floorBuff),
           face: 0, spawnT: type === 'boss' ? 2.8 : 0.9, spawnMax: type === 'boss' ? 2.8 : 0.9,
-          damageMult: floorBuff,
+          damageMult: floorBuff * (1 + 0.2 * cfg.pres),
           flash: 0, slow: 0, burn: 0, blind: 0, marked: 0, stun: 0, corrode: 0, corrodeT: 0, hitCd: 0, t: rand(0, 10),
           state: 'walk', st: rand(0.5, 2), cd: rand(1, 3), side: 1, sideT: 0, pinned: null, impaled: null, pull: false, pullT: 0,
           dead: false, boss: type === 'boss', score: base.score, wanderT: 0, wA: 0, hitDone: false, cA: 0, n: 0
@@ -847,7 +848,7 @@
         for (const t of list) {
           const pos = t === 'boss' ? { x: W / 2, y: 230 } : spawnPos(t === 'mini' ? 34 : ET[t].r);
           if (t === 'mini') { const m = spawnEnemy('tank', pos.x, pos.y); m.mini = true; m.r = 32; m.hp = m.maxHp = 1500 * (1 + 0.25 * (floorN - 1)) * Math.pow(1.45, loop) * ([1, 2, 3, 4][clamp(Number(MP && MP.connected ? MP.players : 1) || 1, 1, 4) - 1]); m.speed *= 1.25; m.score = 1500; banner = { t: 2, max: 2, l1: '¡MINIJEFE!', l2: 'Derrótalo para ganar un charm' }; }
-          else { const ne = spawnEnemy(t, pos.x, pos.y); if (ne && t !== 'boss') ne.speed *= 1 + 0.04 * cfg.pres; if (loop >= 1 && t !== 'boss' && ne && Math.random() < Math.min(0.5, 0.1 + 0.12 * loop)) { const af = ['shield', 'volatile', 'regen', 'frenzy'][Math.floor(Math.random() * 4)]; ne.af = af; if (af === 'shield') ne.hp = ne.maxHp = ne.maxHp * 1.8; if (af === 'frenzy') ne.speed *= 1.4; } if (t === 'boss') { const b = enemies[enemies.length - 1]; b.spawnT = 0; b.orbit = 4.5; } }
+          else { const ne = spawnEnemy(t, pos.x, pos.y); if (loop >= 1 && t !== 'boss' && ne && Math.random() < Math.min(0.5, 0.1 + 0.12 * loop)) { const af = ['shield', 'volatile', 'regen', 'frenzy'][Math.floor(Math.random() * 4)]; ne.af = af; if (af === 'shield') ne.hp = ne.maxHp = ne.maxHp * 1.8; if (af === 'frenzy') ne.speed *= 1.4; } if (t === 'boss') { const b = enemies[enemies.length - 1]; b.spawnT = 0; b.orbit = 4.5; } }
         }
       }
 
@@ -2001,7 +2002,7 @@
             MP.socket.send(JSON.stringify({ type: 'xp-request', amount: Math.max(0, Number(n) || 0), xpStat: P.st.xp }));
           return;
         }
-        xp += n * P.st.xp * (1 + 0.2 * style / 100) * (1 + 0.5 * (floorN - 1) + loop) * (1 + 0.2 * cfg.pres) * 2;
+        xp += n * P.st.xp * (1 + 0.2 * style / 100) * (1 + 0.5 * (floorN - 1) + loop) * (1 - 0.1 * cfg.pres) * 2;
         while (xp >= xpNeed) { xp -= xpNeed; level++; xpNeed = Math.round(xpNeed * 1.25); pend++; if (level === 5 || level === 10 || level === 20) cpend++; }
       }
       const STATS = [
@@ -2015,17 +2016,17 @@
         { id: 's_luck', k: 'luck', name: 'TRÉBOL ABISAL', label: 'Suerte de rareza', base: 0.25, art: 'flarex', icon: 'sonar' },
         { id: 's_econ', k: 'econ', name: 'ECONOMÍA ABISAL', label: 'Interés por sala', base: 0.05, art: 'cable', icon: 'drop' }
       ];
-      const ADD = { ls: 1, heal: 1, econ: 1, luck: 1 }, RC4 = ['#8fb8d8', '#4aa8ff', '#c46bff', '#ffb13b'];
-      function statNew(st, rar, cur) { const b = st.base; if (ADD[st.k]) return cur + b * [1, 4, 12, 40][rar]; return rar === 0 ? cur + b : rar === 1 ? (cur + b) * 1.5 : rar === 2 ? (cur + b) * 3 : Math.pow(cur + b * 3, 3); }
+      const ADD = { ls: 1, heal: 1, econ: 1, luck: 1 }, STAT_CAPS = { dmg: 2, rate: 1.8, spd: 1.5, ls: 0.15, heal: 0.25, xp: 1.5, size: 1.5, luck: 1, econ: 0.5 }, MAX_UPGRADES = 18, MAX_ORGANS = 100, RC4 = ['#8fb8d8', '#4aa8ff', '#c46bff', '#ffb13b'];
+      function statNew(st, rar, cur) { return Math.min(STAT_CAPS[st.k] || 2, cur + st.base * [1, 1.35, 1.8, 2.5][rar]); }
       function statCard(st) {
-        const r = Math.random() / ((1 + P.st.luck) * (1 + 0.06 * pity)), rar = r < 0.0001 ? 3 : r < 0.0051 ? 2 : r < 0.0551 ? 1 : 0, cur = P.st[st.k], nv = statNew(st, rar, cur), f = v => ADD[st.k] ? Math.round(v * 100) + '%' : 'x' + v.toFixed(2);
+        const r = Math.random() / (1 + Math.min(0.5, P.st.luck) * 0.5 + Math.min(8, pity) * 0.015), rar = r < 0.00002 ? 3 : r < 0.0012 ? 2 : r < 0.018 ? 1 : 0, cur = P.st[st.k], nv = statNew(st, rar, cur), f = v => ADD[st.k] ? Math.round(v * 100) + '%' : 'x' + v.toFixed(2);
         pity = rar === 0 ? pity + 1 : 0;
-        return { id: st.id, art: st.art, icon: st.icon, max: 99, rar, col: RC4[rar], name: ['', 'RARA · ', 'ÉPICA · ', 'LEGENDARIA · '][rar] + st.name, desc: st.label + ': ' + f(cur) + ' → ' + f(nv), statKey: st.k, statValue: nv, apply() { P.st[st.k] = nv; } };
+        return { id: st.id, art: st.art, icon: st.icon, max: 1, rar, col: RC4[rar], name: ['', 'RARA · ', 'ÉPICA · ', 'LEGENDARIA · '][rar] + st.name, desc: st.label + ': ' + f(cur) + ' → ' + f(nv), statKey: st.k, statValue: nv, apply() { P.st[st.k] = nv; } };
       }
 
       const WN = { h: 'ARPÓN CINÉTICO', a: 'DISPERSOR BIOLUMINISCENTE', anchor: 'ANCLA GRAVITATORIA', medusa: 'LANZAMEDUSAS', mine: 'MINAS DE CORAL', saw: 'SIERRAS ORBITALES' }, WC = { h: '#9fd0ff', a: '#b6ff3b', anchor: '#b66bff', medusa: '#7affd8', mine: '#7dff6a', saw: '#ffb13b' }, CDX = { anchor: 4, medusa: 0.9, mine: 0.6, saw: 8 };
       const UNDO = { shark: () => { P.shield = Math.max(0, P.shield - 1); }, chamber: () => { P.ammoMax -= 40; P.ammo = Math.min(P.ammo, P.ammoMax); }, hull: () => { P.maxHp -= 30; P.hp = Math.min(P.hp, P.maxHp); } };
-      let invPick = null, invSlot = 0, tutDone = false, tutPage = 0; try { tutDone = localStorage.getItem('ar_tut') === '1'; } catch (e) { }
+      let invPick = null, invSlot = 0, tutDone = false, tutPage = 0, adminOpen = false, adminBossFloor = 1; try { tutDone = localStorage.getItem('ar_tut') === '1'; } catch (e) { }
       const TUT = [
         { t: 'MOVIMIENTO Y DISPARO', col: '#8fd8ff', art: 0, l: ['*WASD* para nadar · el *ratón* apunta.', '*Clic izquierdo* dispara tu arma.', '*Clic derecho* o *Q*: disparo secundario (cable o bengala).', '*1 / 2* o la rueda cambian de arma.'] },
         { t: 'DASH Y BURBUJAS', col: '#7affd8', art: 1, l: ['*Espacio*: impulso invulnerable.', 'Deja una *nube de burbujas* que colapsa al tocarla un enemigo; *E* o *F* la detonan.', 'Cada dash sube la *sobrepresión*: si se llena, el propulsor se bloquea.'] },
@@ -2289,17 +2290,37 @@
       let cfg = { vol: 1, shake: 1, pres: 0, char: 0 }; try { const c0 = JSON.parse(localStorage.getItem('ar_cfg')); if (c0 && typeof c0.vol === 'number') cfg = Object.assign({ pres: 0, shake: 1, char: 0 }, c0); } catch (e) { }
       function wlv(id) { return 1 + 0.25 * ((P && P.wl && P.wl[id]) || 0); }
       function updateOpt() {
+        if (mouse.lp && mouse.y >= 250 && mouse.y <= 520) { const row = clamp(Math.floor((mouse.y - 250) / 90), 0, 2); optSel = row; const dir = mouse.x < 470 ? -1 : mouse.x > 810 ? 1 : 0; if (dir) { if (row === 0) cfg.vol = clamp(Math.round((cfg.vol + dir * 0.1) * 10) / 10, 0, 1); else if (row === 1) cfg.shake = clamp(Math.round((cfg.shake + dir * 0.25) * 100) / 100, 0, 1); else cfg.pres = clamp(cfg.pres + dir, 0, 5); AudioSys.sfx('ui'); } }
         if (pressed.Escape || pressed.KeyO || pressed.Enter) { optMenu = false; try { localStorage.setItem('ar_cfg', JSON.stringify(cfg)); } catch (e) { } return; }
         if (pressed.ArrowUp || pressed.KeyW) optSel = (optSel + 2) % 3; if (pressed.ArrowDown || pressed.KeyS) optSel = (optSel + 1) % 3;
         const d = (pressed.ArrowRight || pressed.KeyD ? 1 : 0) - (pressed.ArrowLeft || pressed.KeyA ? 1 : 0);
         if (d) { if (optSel === 0) { cfg.vol = clamp(Math.round((cfg.vol + d * 0.1) * 10) / 10, 0, 1); if (AudioSys.master && !AudioSys.muted) AudioSys.master.gain.value = 0.55 * cfg.vol; } else if (optSel === 1) cfg.shake = clamp(Math.round((cfg.shake + d * 0.25) * 100) / 100, 0, 1); else cfg.pres = clamp(cfg.pres + d, 0, 5); AudioSys.sfx('ui'); }
       }
       function drawOpt() {
-        dim(0.9); txt('OPCIONES', W / 2, 140, 36, '#8fd8ff', 'center', 14); txt('↑ ↓ elegir · ← → ajustar · Esc / Enter: guardar y cerrar', W / 2, 176, 15, '#cfe0f0', 'center');
-        [['VOLUMEN', cfg.vol, Math.round(cfg.vol * 100) + '%'], ['SACUDIDA DE PANTALLA', cfg.shake, cfg.shake === 0 ? 'APAGADA' : Math.round(cfg.shake * 100) + '%'], ['PRESIÓN (dificultad)', cfg.pres / 5, cfg.pres === 0 ? 'NORMAL' : 'NIVEL ' + cfg.pres + ' · +' + cfg.pres * 15 + '% vida · +' + cfg.pres * 20 + '% XP']].forEach((r, i) => { const y = 250 + i * 90, on = optSel === i; ctx.fillStyle = 'rgba(8,24,40,.92)'; ctx.fillRect(340, y, 600, 70); ctx.strokeStyle = on ? '#ffe94a' : '#26384a'; ctx.lineWidth = on ? 3 : 2; ctx.strokeRect(340, y, 600, 70); txt(r[0], 360, y + 30, 16, on ? '#ffe94a' : '#cfe0f0', 'left'); txt(r[2], 920, y + 30, 16, '#fff', 'right'); ctx.fillStyle = '#16222e'; ctx.fillRect(360, y + 44, 560, 10); ctx.fillStyle = on ? '#ffe94a' : '#8fb8d8'; ctx.fillRect(360, y + 44, 560 * r[1], 10); });
+        dim(0.9); txt('OPCIONES', W / 2, 140, 36, '#8fd8ff', 'center', 14); txt('↑ ↓ o clic en fila · ← → / clic en extremos para ajustar · Esc / Enter guardar', W / 2, 176, 14, '#cfe0f0', 'center');
+        [['VOLUMEN', cfg.vol, Math.round(cfg.vol * 100) + '%'], ['SACUDIDA DE PANTALLA', cfg.shake, cfg.shake === 0 ? 'APAGADA' : Math.round(cfg.shake * 100) + '%'], ['PRESIÓN (dificultad)', cfg.pres / 5, cfg.pres === 0 ? 'NORMAL' : 'NIVEL ' + cfg.pres + ' · +' + cfg.pres * 20 + '% vida/daño enemigo · -' + cfg.pres * 10 + '% jugador/XP']].forEach((r, i) => { const y = 250 + i * 90, on = optSel === i; ctx.fillStyle = 'rgba(8,24,40,.92)'; ctx.fillRect(340, y, 600, 70); ctx.strokeStyle = on ? '#ffe94a' : '#26384a'; ctx.lineWidth = on ? 3 : 2; ctx.strokeRect(340, y, 600, 70); txt('−', 380, y + 30, 22, on ? '#ffe94a' : '#8fb8d8', 'center'); txt(r[0], 420, y + 30, 16, on ? '#ffe94a' : '#cfe0f0', 'left'); txt(r[2], 840, y + 30, 16, '#fff', 'right'); txt('+', 890, y + 30, 22, on ? '#ffe94a' : '#8fb8d8', 'center'); ctx.fillStyle = '#16222e'; ctx.fillRect(360, y + 44, 560, 10); ctx.fillStyle = on ? '#ffe94a' : '#8fb8d8'; ctx.fillRect(360, y + 44, 560 * r[1], 10); });
       }
 
-      function menuFX() {
+      function updateAdminPanel() {
+        if (pressed.Escape || pressed.F8) { adminOpen = false; return; }
+        if (pressed.ArrowUp || pressed.KeyW) adminBossFloor = Math.max(1, adminBossFloor - 1);
+        if (pressed.ArrowDown || pressed.KeyS) adminBossFloor = Math.min(FLOORS, adminBossFloor + 1);
+        for (let i=1;i<=8;i++) if (pressed['Digit'+i]) adminBossFloor=i;
+        if (pressed.Enter) {
+          adminOpen = false; infinite = false; newRun(); floorN = adminBossFloor; roomN = 4; genDungeon();
+          const bossCell = Object.values(dun.cells).find(c => c.type === 'boss');
+          if (bossCell) { cell = bossCell; cell.visited = true; startRoom(); state = 'playing'; rs = 'fight'; }
+          banner = { t: 3, max: 3, l1: 'MODO ADMINISTRADOR', l2: 'Prueba de jefe · Sector ' + floorN };
+        }
+      }
+      function drawAdminPanel() {
+        if (!adminOpen) return;
+        ctx.save(); ctx.fillStyle='rgba(0,4,12,.95)'; ctx.fillRect(230,90,820,540); ctx.strokeStyle='#ff4fd8'; ctx.lineWidth=3; ctx.strokeRect(230,90,820,540);
+        txt('PANEL DE ADMINISTRADOR · TEMPORAL',W/2,145,29,'#ff4fd8','center',12); txt('SELECCIONA EL JEFE QUE QUIERES PROBAR',W/2,190,16,'#cfe0f0','center');
+        for(let i=1;i<=8;i++){const y=225+(i-1)*42,active=adminBossFloor===i;ctx.fillStyle=active?'rgba(196,107,255,.22)':'rgba(8,24,40,.9)';ctx.fillRect(340,y,600,34);ctx.strokeStyle=active?'#ff4fd8':'#26384a';ctx.lineWidth=active?2.5:1;ctx.strokeRect(340,y,600,34);txt('['+i+']  SECTOR '+i+' · '+(LOG_ENTRIES.find(q=>q.id==='boss'+i)?.title||'JEFE'),360,y+22,14,active?'#ffe94a':'#cfe0f0','left');}
+        txt('↑ ↓ o 1–8: elegir · ENTER: TELETRANSPORTAR · ESC/F8: cerrar',W/2,590,14,'#8fb8d8','center');ctx.restore();
+      }
+      \n      function menuFX() {
         ctx.save(); ctx.globalCompositeOperation = 'lighter'; for (let i = 0; i < 6; i++) { const x0 = i * 240 - 80 + Math.sin(time * 0.35 + i) * 50; ctx.fillStyle = 'rgba(90,190,255,0.05)'; ctx.beginPath(); ctx.moveTo(x0, 0); ctx.lineTo(x0 + 80, 0); ctx.lineTo(x0 + 330, H); ctx.lineTo(x0 + 150, H); ctx.fill(); }
         ctx.globalCompositeOperation = 'source-over'; const sx = ((time * 30) % (W + 800)) - 400; ctx.globalAlpha = 0.5; ctx.fillStyle = '#000'; ctx.beginPath(); ctx.moveTo(sx + 200, 650); ctx.quadraticCurveTo(sx + 60, 600, sx - 160, 650 + Math.sin(time) * 8); ctx.lineTo(sx - 260, 610); ctx.lineTo(sx - 220, 650); ctx.lineTo(sx - 260, 690); ctx.lineTo(sx - 160, 670); ctx.quadraticCurveTo(sx + 60, 700, sx + 200, 650); ctx.fill();
         ctx.fillStyle = '#ff2a3a'; ctx.globalAlpha = 0.7 + 0.3 * Math.sin(time * 3); ctx.beginPath(); ctx.arc(sx + 110, 638, 3, 0, TAU); ctx.fill(); const vg = ctx.createRadialGradient(W / 2, H / 2, H * 0.35, W / 2, H / 2, W * 0.7); vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(0,0,0,0.65)'); ctx.globalAlpha = 1; ctx.fillStyle = vg; ctx.fillRect(0, 0, W, H); ctx.restore();
@@ -2516,7 +2537,7 @@
             enemies = [];
             if (waveQueue.length) spawnWave();
             else {
-              rs = 'cleared'; cell.cleared = true; organs = Math.round((organs + (2 + (cell.type === 'boss' ? 5 : 0)) * (1 + 0.5 * style / 100)) * (1 + P.st.econ)); addStyle(20, 'SALA');
+              rs = 'cleared'; cell.cleared = true; organs = Math.min(MAX_ORGANS, Math.round((organs + (2 + (cell.type === 'boss' ? 5 : 0)) * (1 + 0.5 * style / 100)) * (1 + Math.min(0.5, P.st.econ)))); addStyle(20, 'SALA');
               banner = { t: 2, max: 2, l1: cell.type === 'boss' ? 'ABISMO ' + floorN + ' SUPERADO' : 'AGUAS DESPEJADAS', l2: 'Las compuertas ceden' };
               P.hp = Math.min(P.maxHp, P.hp + Math.round(P.maxHp * (0.1 + P.st.heal)));
               if (cell.type === 'boss') exitPortal = { x: W / 2, y: H / 2 };
@@ -2529,13 +2550,20 @@
         doorOpen = approach(doorOpen, rs === 'cleared' || rs === 'shop' ? 1 : 0, dt * 2);
       }
       function openUpgrades() {
-        const pool = UPS.filter(u => (P.up[u.id] || 0) < u.max && !(u.par && P.char)), sel = [];
-        while (sel.length < 3) { if (Math.random() < 0.6 || !pool.length) { const st = STATS[Math.floor(Math.random() * STATS.length)]; if (!sel.some(c => c.id === st.id)) sel.push(statCard(st)); } else sel.push(pool.splice(Math.floor(Math.random() * pool.length), 1)[0]); }
+        if (P.hist.length >= MAX_UPGRADES) { organs = Math.min(MAX_ORGANS, organs + 10); banner = { t: 2.2, max: 2.2, l1: 'LÍMITE DE MUTACIONES', l2: '+10 órganos · build completo (' + MAX_UPGRADES + '/' + MAX_UPGRADES + ')' }; state = 'playing'; cards = []; return; }
+        const pool = UPS.filter(u => (P.up[u.id] || 0) < u.max && !(u.par && P.char)), stats = STATS.filter(st => P.st[st.k] < (STAT_CAPS[st.k] || 2)), sel = [];
+        while (sel.length < 3 && (pool.length || stats.length)) {
+          if ((Math.random() < 0.55 || !pool.length) && stats.length) sel.push(statCard(stats.splice(Math.floor(Math.random() * stats.length), 1)[0]));
+          else if (pool.length) sel.push(pool.splice(Math.floor(Math.random() * pool.length), 1)[0]);
+        }
+        if (!sel.length) { organs = Math.min(MAX_ORGANS, organs + 10); state = 'playing'; return; }
         cards = sel; state = 'upgrade'; stateT = 0; AudioSys.sfx('upgrade');
       }
       function chooseUpgrade(u) {
+        if (P.hist.length >= MAX_UPGRADES) { organs = Math.min(MAX_ORGANS, organs + 10); state = 'playing'; cards = []; return; }
         P.up[u.id] = (P.up[u.id] || 0) + 1;
         if (u.apply) u.apply();
+        if (u.statKey) P.st[u.statKey] = Math.min(STAT_CAPS[u.statKey] || 2, u.statValue);
         P.hist.push({ id: u.id, name: u.name, col: u.col, stat: STATS.find(q => q.id === u.id) || null, rar: u.rar || 0 });
         AudioSys.sfx('upgrade');
         P.hp = Math.min(P.maxHp, P.hp + Math.round(P.maxHp * (0.1 + P.st.heal)));
@@ -2859,6 +2887,9 @@ maxRank = Math.max(maxRank, sr()); ambT -= dt; if (ambT <= 0) { ambT = rand(9, 2
           AudioSys.sfx('invopen');
         }
         time += dt;
+        organs = clamp(organs, 0, MAX_ORGANS);
+        if (pressed.F8 && (!MP || !MP.connected)) { adminOpen = !adminOpen; AudioSys.sfx('ui'); }
+        if (adminOpen) { updateAdminPanel(); return; }
         if (pressed.KeyM) AudioSys.toggleMute();
         for (const m of motes) { m.x += Math.sin(time * m.sp + m.ph) * 8 * dt; m.y -= m.v * dt; if (m.y < -10) { m.y = H + 10; m.x = rand(0, W); } }
         switch (state) {
@@ -3870,6 +3901,7 @@ maxRank = Math.max(maxRank, sr()); ambT -= dt; if (ambT <= 0) { ambT = rand(9, 2
           }
           drawFX();
           drawCursor();
+          drawAdminPanel();
           return;
         }
         const sx = (Math.random() * 2 - 1) * shakeMag, sy = (Math.random() * 2 - 1) * shakeMag;
@@ -3890,6 +3922,7 @@ maxRank = Math.max(maxRank, sr()); ambT -= dt; if (ambT <= 0) { ambT = rand(9, 2
         else if (state === 'dive') drawDive();
         else if (state === 'gameover') { drawGameOver(); drawSummary(); }
         else if (state === 'victory') { drawVictory(); drawSummary(); }
+        drawAdminPanel();
         if (fade > 0) { ctx.fillStyle = 'rgba(0,0,0,' + clamp(fade, 0, 1) + ')'; ctx.fillRect(0, 0, W, H); }
         drawCursor();
       }
