@@ -2320,7 +2320,7 @@
         for(let i=1;i<=8;i++){const y=225+(i-1)*42,active=adminBossFloor===i;ctx.fillStyle=active?'rgba(196,107,255,.22)':'rgba(8,24,40,.9)';ctx.fillRect(340,y,600,34);ctx.strokeStyle=active?'#ff4fd8':'#26384a';ctx.lineWidth=active?2.5:1;ctx.strokeRect(340,y,600,34);txt('['+i+']  SECTOR '+i+' · '+(LOG_ENTRIES.find(q=>q.id==='boss'+i)?.title||'JEFE'),360,y+22,14,active?'#ffe94a':'#cfe0f0','left');}
         txt('↑ ↓ o 1–8: elegir · ENTER: TELETRANSPORTAR · ESC/F8: cerrar',W/2,590,14,'#8fb8d8','center');ctx.restore();
       }
-      \n      function menuFX() {
+      function menuFX() {
         ctx.save(); ctx.globalCompositeOperation = 'lighter'; for (let i = 0; i < 6; i++) { const x0 = i * 240 - 80 + Math.sin(time * 0.35 + i) * 50; ctx.fillStyle = 'rgba(90,190,255,0.05)'; ctx.beginPath(); ctx.moveTo(x0, 0); ctx.lineTo(x0 + 80, 0); ctx.lineTo(x0 + 330, H); ctx.lineTo(x0 + 150, H); ctx.fill(); }
         ctx.globalCompositeOperation = 'source-over'; const sx = ((time * 30) % (W + 800)) - 400; ctx.globalAlpha = 0.5; ctx.fillStyle = '#000'; ctx.beginPath(); ctx.moveTo(sx + 200, 650); ctx.quadraticCurveTo(sx + 60, 600, sx - 160, 650 + Math.sin(time) * 8); ctx.lineTo(sx - 260, 610); ctx.lineTo(sx - 220, 650); ctx.lineTo(sx - 260, 690); ctx.lineTo(sx - 160, 670); ctx.quadraticCurveTo(sx + 60, 700, sx + 200, 650); ctx.fill();
         ctx.fillStyle = '#ff2a3a'; ctx.globalAlpha = 0.7 + 0.3 * Math.sin(time * 3); ctx.beginPath(); ctx.arc(sx + 110, 638, 3, 0, TAU); ctx.fill(); const vg = ctx.createRadialGradient(W / 2, H / 2, H * 0.35, W / 2, H / 2, W * 0.7); vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(0,0,0,0.65)'); ctx.globalAlpha = 1; ctx.fillStyle = vg; ctx.fillRect(0, 0, W, H); ctx.restore();
