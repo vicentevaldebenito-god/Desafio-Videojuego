@@ -1682,7 +1682,7 @@
         }
         if (bfl() === 4) { e.parryT = Math.max(0, (e.parryT || 0) - dt); e.dodgeT = Math.max(0, (e.dodgeT || 0) - dt); e.ecd = Math.max(0, (e.ecd || 0) - dt); if (e.reflect) { e.reflect = false; for (let i = -3; i <= 3; i++) enemyShoot(e, toP + i * 0.12, 560, 12, false); ring(e.x,e.y,115,'#8feaff',0.35,5); } if (e.dodgeT > 0) { moveEntity(e, Math.cos(e.dodgeA) * 900 * dt, Math.sin(e.dodgeA) * 900 * dt, e.r); e.vis = e.dodgeA; return; } if(e.ecd<=0 && e.parryT<=0 && e.state!=='mirror_dash' && e.state!=='mirror_dash_aim' && Math.random()<dt*0.65){e.parryT=0.62;e.ecd=2.8;ring(e.x,e.y,78,'#b9f4ff',0.38,5);AudioSys.sfx('parry');} }
         if (bfl() === 5) {
-          // Cadena articulada: cada placa sigue a la anterior manteniendo separación constante.
+          // Cuerpo articulado con seguimiento independiente de los FPS.
           const count = 30, spacing = 22, face = Number.isFinite(e.face) ? e.face : 0;
           if (!e.seg || e.seg.length !== count) {
             e.seg = Array.from({ length: count }, (_, i) => ({
@@ -1690,14 +1690,14 @@
               y: e.y - Math.sin(face) * spacing * (i + 1)
             }));
           }
+          const follow = 1 - Math.exp(-dt * 25);
           let px = e.x, py = e.y;
           for (let i = 0; i < e.seg.length; i++) {
             const g = e.seg[i], dx = g.x - px, dy = g.y - py;
             const dd = Math.hypot(dx, dy) || 0.001;
             const tx = px + dx / dd * spacing, ty = py + dy / dd * spacing;
-            // Suaviza el seguimiento para que las curvas viajen por todo el cuerpo.
-            g.x += (tx - g.x) * 0.72;
-            g.y += (ty - g.y) * 0.72;
+            g.x += (tx - g.x) * follow;
+            g.y += (ty - g.y) * follow;
             px = g.x; py = g.y;
           }
         }
@@ -3498,10 +3498,14 @@ maxRank = Math.max(maxRank, sr()); ambT -= dt; if (ambT <= 0) { ambT = rand(9, 2
               const u = (i + 1) / (sg.length + 1);
               const rr = Math.max(3.2, r * (0.72 - 0.48 * u));
               const x = g.x - e.x, y = g.y - e.y;
-              const tangent = Math.atan2(next.y - prev.y, next.x - prev.x);
-              const wave = Math.sin(e.t * 5.2 - i * 0.34) * r * 0.025;
+              // La tangente se convierte al espacio local de la cabeza.
+              const tangent = Math.atan2(next.y - prev.y, next.x - prev.x) - fa0;
+              // Onda lateral progresiva: la cola se balancea más que el cuello.
+              const wave = Math.sin(e.t * 6.2 - i * 0.38) * r * (0.055 + u * 0.17);
+              const swayX = Math.sin(tangent) * wave;
+              const swayY = -Math.cos(tangent) * wave;
               ctx.save();
-              ctx.translate(x + wave, y);
+              ctx.translate(x + swayX, y + swayY);
               ctx.rotate(tangent);
               // Aleta dorsal pequeña en cada placa alterna: silueta de anguila eléctrica.
               if (i % 2 === 0 && i < sg.length - 2) {
