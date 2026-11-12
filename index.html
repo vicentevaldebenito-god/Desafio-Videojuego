@@ -1690,14 +1690,16 @@
               y: e.y - Math.sin(face) * spacing * (i + 1)
             }));
           }
-          const follow = 1 - Math.exp(-dt * 25);
+          // La cabeza marca la trayectoria: el primer segmento la sigue con fuerza y la onda viaja hacia la cola.
+          const follow = 1 - Math.exp(-dt * 18);
           let px = e.x, py = e.y;
           for (let i = 0; i < e.seg.length; i++) {
             const g = e.seg[i], dx = g.x - px, dy = g.y - py;
             const dd = Math.hypot(dx, dy) || 0.001;
             const tx = px + dx / dd * spacing, ty = py + dy / dd * spacing;
-            g.x += (tx - g.x) * follow;
-            g.y += (ty - g.y) * follow;
+            const k = follow * (i < 4 ? 1.35 : 1);
+            g.x += (tx - g.x) * Math.min(1,k);
+            g.y += (ty - g.y) * Math.min(1,k);
             px = g.x; py = g.y;
           }
         }
@@ -1716,7 +1718,7 @@
           else if (bfl() === 7) { if (r < 0.28) { e.state = 'sonic'; e.st = 1.5; e.cA = toP; } else if (r < 0.5) { e.state = 'rain'; e.st = 3; e.cd = 0; } else if (r < 0.68) { e.state = 'vortex'; e.st = 2; } else if (r < 0.84) Z(); else RU(); }
           else if (bfl() === 1) { if (r < 0.17) { e.state = 'roll'; e.st = 1.25; e.rollA = toP; e.rollN = 3; } else if (r < 0.32) Z(); else if (r < 0.52) X(); else if (r < 0.72) RU(); else if (r < 0.86) VO(); else { e.state = 'burst'; e.n = 6 + 2 * k; e.st = 0.5; } }
           else if (bfl() === 2) { if (r < 0.18) Z(); else if (r < 0.34) X(); else if (r < 0.48) RU(); else if (r < 0.64) { e.state = 'lamp_telegraph'; e.st = 2.45; e.lampLock = false; e.cA = toP; inkT = 2.6; } else if (r < 0.8) VO(); else { e.state = 'cam'; e.st = 2.2; } }
-          else { if (r < 0.15) Z(); else if (r < 0.35) TN(); else if (r < 0.5) { e.state = 'vortex'; e.st = 2; } else if (r < 0.7) { e.state = 'beams'; e.st = 3.2; e.bA = toP; e.bh = 0; } else if (r < 0.85) { e.state = 'ink'; e.st = 3; e.cd = 0; } else RU(); }
+          else { if (r < 0.15) Z(); else if (r < 0.35) TN(); else if (r < 0.5) { e.state = 'vortex'; e.st = 2; } else if (r < 0.7) { e.state = 'tent'; e.st = 3.1; e.tt = Array.from({length:7},(_,i)=>({x:i<3?arenaB.l+45: i<5?arenaB.r-45:clamp(target.x+rand(-150,150),arenaB.l+45,arenaB.r-45),y:i<3?clamp(target.y+rand(-180,180),arenaB.t+45,arenaB.b-45):i<5?clamp(target.y+rand(-180,180),arenaB.t+45,arenaB.b-45):arenaB.b-55,t:0.85+i*0.16,d:false,side:i<3?'left':i<5?'right':'floor'})); } else if (r < 0.85) { e.state = 'ink'; e.st = 3; e.cd = 0; } else RU(); }
         };
         switch (e.state) {
           case 'walk':
@@ -3500,7 +3502,7 @@ maxRank = Math.max(maxRank, sr()); ambT -= dt; if (ambT <= 0) { ambT = rand(9, 2
               // La tangente se convierte al espacio local de la cabeza.
               const tangent = Math.atan2(next.y - prev.y, next.x - prev.x) - fa0;
               // Onda lateral progresiva: la cola se balancea más que el cuello.
-              const wave = Math.sin(e.t * 6.2 - i * 0.38) * r * (0.025 + u * 0.09);
+              const wave = Math.sin(e.t * 5.2 - i * 0.31) * r * (0.012 + u * 0.055);
               const swayX = Math.sin(tangent) * wave;
               const swayY = -Math.cos(tangent) * wave;
               ctx.save();
@@ -3536,13 +3538,13 @@ maxRank = Math.max(maxRank, sr()); ambT -= dt; if (ambT <= 0) { ambT = rand(9, 2
             // Cabeza viva: balanceo, cabeceo y mandíbula articulada, independientes del cuerpo.
             const eelSpeed = e.state === 'zd' || e.state === 'xd' ? 1.8 : e.state === 'zap' || e.state === 'coil' ? 1.35 : 1;
             const headBeat = e.t * (5.4 * eelSpeed);
-            const headBob = Math.sin(headBeat) * r * 0.14;
-            const headPitch = Math.sin(headBeat * 0.72 + 0.8) * 0.14 + (e.state === 'zap' ? Math.sin(e.t * 22) * 0.09 : 0);
+            const headBob = Math.sin(headBeat) * r * 0.24;
+            const headPitch = Math.sin(headBeat * 0.72 + 0.8) * 0.22 + (e.state === 'zap' ? Math.sin(e.t * 22) * 0.12 : 0);
             const jawOpen = e.state === 'zap' ? 0.22 + 0.13 * (0.5 + 0.5 * Math.sin(e.t * 19)) : e.state === 'coil' ? 0.12 : 0.045 + 0.035 * (0.5 + 0.5 * Math.sin(headBeat));
             ctx.save();
             ctx.translate(r * 0.12, headBob);
-            ctx.rotate(fa0 + headPitch);
-            ctx.scale(1 + Math.sin(headBeat) * 0.035, 1 - Math.sin(headBeat) * 0.025);
+            ctx.rotate(headPitch);
+            ctx.scale(1 + Math.sin(headBeat) * 0.055, 1 - Math.sin(headBeat) * 0.045);
             const head=ctx.createLinearGradient(0,-r,0,r);head.addColorStop(0,fl?'#fff':'#fff07a');head.addColorStop(1,fl?'#fff':'#71621b');ctx.fillStyle=head;ctx.beginPath();ctx.moveTo(r*.75,-r*.5);ctx.quadraticCurveTo(r*1.8,-r*.42,r*2.35,-r*.08-jawOpen*r);ctx.quadraticCurveTo(r*2.5,0,r*2.35,r*.08+jawOpen*r);ctx.quadraticCurveTo(r*1.8,r*.42,r*.75,r*.5);ctx.quadraticCurveTo(r*.45,0,r*.75,-r*.5);ctx.fill();ctx.strokeStyle=bc;ctx.lineWidth=3;ctx.stroke();
             // Aletas cefálicas que reaccionan al avance y al ataque.
             for(const sd of [-1,1]){ctx.fillStyle=fl?'#fff':'#c9b83d';ctx.beginPath();ctx.moveTo(r*.25,sd*r*.28);ctx.quadraticCurveTo(-r*.05,sd*r*(.72+Math.sin(headBeat+sd)*.08),-r*.62,sd*r*(.78+Math.sin(headBeat+sd)*.12));ctx.quadraticCurveTo(-r*.42,sd*r*.25,r*.25,sd*r*.28);ctx.fill();ctx.strokeStyle='rgba(255,239,115,.65)';ctx.lineWidth=1.5;ctx.stroke();}
