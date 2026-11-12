@@ -3896,6 +3896,7 @@ maxRank = Math.max(maxRank, sr()); ambT -= dt; if (ambT <= 0) { ambT = rand(9, 2
           if (tutMenu) drawTut();
           if (bestMenu) drawBest();
           if (charMenu) drawChar();
+          if (optMenu) drawOpt();
           if (!tutMenu && !bestMenu && !optMenu && !charMenu) {
             txt('[I] INFINITO · [H] TUTORIAL · [B] LOGS · [O] OPCIONES · [C] PERSONAJE · [E] MULTIJUGADOR', W / 2, H - 40, 14, '#ff4fd8', 'center', 8);
           }
