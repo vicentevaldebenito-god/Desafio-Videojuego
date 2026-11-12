@@ -2877,19 +2877,25 @@ maxRank = Math.max(maxRank, sr()); ambT -= dt; if (ambT <= 0) { ambT = rand(9, 2
       }
 
       function update(dt) {
-        // El invitado queda completamente congelado hasta que el anfitrión reanude.
-        if (MP && MP.connected && !MP.isHost && MP.sharedLocked &&
-            !['upgrade','class','inv'].includes(state)) return;
+        // Atajos de interfaz antes de cualquier bloqueo de simulación.
+        // Retornar en el mismo frame evita que el mismo Tab/Y abra y cierre el panel instantáneamente.
+        if (pressed.KeyY && (!MP || !MP.connected)) {
+          adminOpen = !adminOpen; AudioSys.sfx('ui');
+          if (adminOpen) return;
+        }
+        if (adminOpen) { updateAdminPanel(); return; }
         if (pressed.Tab && P && !P.dead && (state === 'playing' || state === 'inv')) {
           const closing = state === 'inv';
           state = closing ? 'playing' : 'inv';
           if (closing && MP.pendingClassMenu) { state = 'class'; MP.pendingClassMenu = false; MP.localClassOpen = true; }
           AudioSys.sfx('invopen');
+          return;
         }
+        // El invitado queda completamente congelado hasta que el anfitrión reanude.
+        if (MP && MP.connected && !MP.isHost && MP.sharedLocked &&
+            !['upgrade','class','inv'].includes(state)) return;
         time += dt;
         organs = clamp(organs, 0, MAX_ORGANS);
-        if (pressed.KeyY && (!MP || !MP.connected)) { adminOpen = !adminOpen; AudioSys.sfx('ui'); }
-        if (adminOpen) { updateAdminPanel(); return; }
         if (pressed.KeyM) AudioSys.toggleMute();
         for (const m of motes) { m.x += Math.sin(time * m.sp + m.ph) * 8 * dt; m.y -= m.v * dt; if (m.y < -10) { m.y = H + 10; m.x = rand(0, W); } }
         switch (state) {
