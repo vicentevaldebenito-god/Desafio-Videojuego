@@ -1243,6 +1243,14 @@
             if (healed >= 1) floatText('+' + Math.round(healed), P.x, P.y - 28, '#c46bff', 13);
           }
         }
+        // El golpe letal final inicia una ejecución cinematográfica en vez de matar instantáneamente.
+        if (e.boss && e.despFinished && !e.finisherDone && !e.finisher && e.hp - d <= 0) {
+          e.hp = 1; e.finisher = { t: 0, duration: 1.65, sx: P.x, sy: P.y, ex: e.x, ey: e.y };
+          e.vx = e.vy = 0; e.state = 'finisher'; e.flash = 0.25;
+          bullets.length = 0; ebullets.length = 0;
+          shake(5); AudioSys.sfx('roar');
+          return d;
+        }
         e.hp -= d; e.flash = 0.1;
         if (blocked && d > 5 && Math.random() < 0.6) { spark(e.x, e.y, 3, '#ffd23f', 260); AudioSys.sfx('hit'); }
         else AudioSys.sfx('hit');
@@ -1565,6 +1573,12 @@
       }
 
       function updateBoss(e, dt, target) {
+        if (e.finisher && !e.finisherDone) {
+          const c=e.finisher; c.t=Math.min(c.duration,c.t+dt*0.32);
+          e.vx=e.vy=0; e.face=Math.atan2(c.sy-e.y,c.sx-e.x);
+          if(c.t>=c.duration){e.finisherDone=true;e.finisher=null;killEnemy(e);}
+          return;
+        }
         if (e.amalStalker) {
           if (!amalEncounter || amalEncounter.phase !== 'arena') return;
           e.amalStalker = false;
@@ -3307,6 +3321,7 @@ maxRank = Math.max(maxRank, sr()); ambT -= dt; if (ambT <= 0) { ambT = rand(9, 2
         }
         if(e.boss){const attack=['xd','zd','rr','amb','roll_dash','lamp_strike','edash','mirror_dash','charge','sonic','desp_chase','desp_line_dash','desp_algae'].includes(e.state),wind=['aim','lamp_telegraph','desp_chase_telegraph','desp_line_telegraph','desp_inhale','roll_aim','cwind'].includes(e.state),breath=Math.sin(e.t*2.15)*.045,beat=Math.sin(e.t*7.5)*.018;ctx.translate(0,Math.sin(e.t*2.6)*5+(attack?Math.sin(e.t*18)*3:0));ctx.rotate(Math.sin(e.t*1.7)*.026+(e.state==='walk'?Math.sin(e.t*4.2)*.018:0)+(attack?Math.sin(e.t*15)*.025:0));ctx.scale(1+breath+(attack?.11:wind?.045:0),1-breath*.7-(attack?.075:0)+beat);}
         drawBody(e, fl, col);
+        if(e.finisher){ctx.save();ctx.globalCompositeOperation='lighter';ctx.strokeStyle='rgba(180,235,255,.8)';ctx.lineWidth=3;ctx.beginPath();ctx.arc(e.x,e.y,e.r+18+Math.sin(time*18)*5,0,TAU);ctx.stroke();ctx.restore();}
         if (false) {
           ctx.rotate(e.face); ctx.lineCap = 'round'; ctx.strokeStyle = fl ? '#fff' : '#1b6e5a'; ctx.lineWidth = 3;
           for (let i = 0; i < 6; i++) {
@@ -3647,6 +3662,16 @@ maxRank = Math.max(maxRank, sr()); ambT -= dt; if (ambT <= 0) { ambT = rand(9, 2
       }
 
       function drawBullets() {
+        // Proyectil de remate: cámara lenta visual, estela y crecimiento hacia el impacto.
+        for(const e of enemies) if(e.finisher){
+          const c=e.finisher, k=clamp(c.t/c.duration,0,1), ease=k*k*(3-2*k);
+          const x=c.sx+(c.ex-c.sx)*ease, y=c.sy+(c.ey-c.sy)*ease;
+          ctx.save();ctx.globalCompositeOperation='lighter';
+          ctx.strokeStyle='rgba(125,225,255,.55)';ctx.lineWidth=7;ctx.beginPath();ctx.moveTo(x-(c.ex-c.sx)*.045,y-(c.ey-c.sy)*.045);ctx.lineTo(x,y);ctx.stroke();
+          ctx.shadowColor='#b9f5ff';ctx.shadowBlur=24;ctx.fillStyle='#ffffff';ctx.beginPath();ctx.arc(x,y,5+ease*5,0,TAU);ctx.fill();
+          ctx.fillStyle='rgba(150,225,255,.8)';ctx.beginPath();ctx.arc(x,y,10+ease*8,0,TAU);ctx.fill();ctx.restore();
+          if(k>.88){ctx.save();ctx.globalAlpha=(k-.88)/.12;ctx.fillStyle='#fff';ctx.fillRect(0,0,W,H);ctx.restore();}
+        }
         for (const b of bullets) {
           if (b.type === 'harpoon') {
             const c = Math.cos(b.a), s = Math.sin(b.a);
