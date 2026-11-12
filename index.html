@@ -1533,6 +1533,7 @@
           e.hp = e.maxHp = 1e12; e.phaseInvuln = 0; e.despLock = false; e.despFinished = true;
           updateBoss(e, dt, P);
           e.hp = hp; e.maxHp = maxHp; e.amalStalker = true;
+          if (e.amalDropT !== undefined) { e.amalDropT += dt; const k = clamp(e.amalDropT / 1.35, 0, 1); e.y = -150 + 390 * (k*k*(3-2*k)); if (k >= 1) { delete e.amalDropT; if (!e.amalDropDone) { e.amalDropDone = true; shake(38); hitstop = 0.32; ring(e.x,e.y,520,'#d7f8ff',0.9,12); AudioSys.sfx('boom'); for(let i=0;i<22;i++) bubbles(e.x+rand(-130,130),e.y+rand(-50,50),2,70); } } }
           e.amalMorphT = Math.max(0,(e.amalMorphT||0)-dt); e.r = 105;
           return;
           const a = Math.atan2(P.y - e.y, P.x - e.x), d = dist(P.x, P.y, e.x, e.y);
@@ -2602,7 +2603,7 @@
         }
         if (a.phase === 'materialize') {
           a.eyeClose = Math.max(0, 1 - a.timer / 1.15);
-          if (a.timer >= 1.15 && !a.boss) { const b = spawnEnemy('boss', W * 0.5, 220); if (b) { b.amalStalker = true; b.r = 105; b.hp = b.maxHp = 1e12; b.spawnT = 0; b.orbit = 0; b.state = 'walk'; b.amalAttackCd = 2.2; b.amalForm = 1; a.boss = b; } a.materialize = 1; shake(22); AudioSys.sfx('roar'); }
+          if (a.timer >= 1.15 && !a.boss) { const b = spawnEnemy('boss', W * 0.5, -150); if (b) { b.amalStalker = true; b.r = 105; b.hp = b.maxHp = 1e12; b.spawnT = 0; b.orbit = 0; b.state = 'walk'; b.amalAttackCd = 3.5; b.amalForm = 1; b.amalDropT = 0; b.amalDropDone = false; a.boss = b; } a.materialize = 1; shake(22); AudioSys.sfx('roar'); }
           if (a.timer >= 3.4) { a.phase = 'arena'; a.timer = 0; a.nextForm = 13; }
           return;
         }
@@ -3706,6 +3707,14 @@ maxRank = Math.max(maxRank, sr()); ambT -= dt; if (ambT <= 0) { ambT = rand(9, 2
         const a=amalEncounter;
         if(a.phase==='corridor') { ctx.save();ctx.fillStyle='rgba(0,0,0,.24)';ctx.fillRect(WALL+1,WALL+1,W-WALL*2-2,H-WALL*2-2);ctx.fillStyle='rgba(12,24,35,.38)';ctx.fillRect(WALL+232,WALL+1,W-2*WALL-464,H-WALL*2-2);ctx.strokeStyle='rgba(110,190,215,.24)';ctx.lineWidth=3;for(let y=WALL+20;y<H-WALL;y+=54){ctx.beginPath();ctx.moveTo(WALL+238,y);ctx.lineTo(W-WALL-238,y);ctx.stroke();}ctx.restore(); }
         if(a.phase==='arena') {
+          // La cámara mantiene la arena iluminada: se leen el suelo, la criatura y los ataques.
+          ctx.save();
+          const ambient=ctx.createRadialGradient(W/2,H/2,90,W/2,H/2,760);ambient.addColorStop(0,'rgba(72,145,170,.19)');ambient.addColorStop(.65,'rgba(34,85,110,.12)');ambient.addColorStop(1,'rgba(0,0,0,.24)');ctx.fillStyle=ambient;ctx.fillRect(WALL,WALL,W-WALL*2,H-WALL*2);
+          const light=ctx.createRadialGradient(P.x,P.y,35,P.x,P.y,470);light.addColorStop(0,'rgba(190,240,255,.17)');light.addColorStop(1,'rgba(190,240,255,0)');ctx.fillStyle=light;ctx.fillRect(0,0,W,H);
+          if(a.boss && a.boss.amalDropDone){const bl=ctx.createRadialGradient(a.boss.x,a.boss.y,20,a.boss.x,a.boss.y,360);bl.addColorStop(0,'rgba(150,220,255,.18)');bl.addColorStop(1,'rgba(150,220,255,0)');ctx.fillStyle=bl;ctx.fillRect(0,0,W,H);}
+          // Fisuras del impacto que recorren el suelo de la cámara.
+          if(a.boss && a.boss.amalDropDone){ctx.globalAlpha=.32;ctx.strokeStyle='#9bb9c2';ctx.lineWidth=3;for(let i=0;i<9;i++){const an=i*TAU/9+.18;ctx.beginPath();ctx.moveTo(a.boss.x+Math.cos(an)*80,a.boss.y+Math.sin(an)*80);let x=a.boss.x,y=a.boss.y;for(let j=0;j<5;j++){x+=Math.cos(an+(Math.random()-.5)*.28)*42;y+=Math.sin(an+(Math.random()-.5)*.28)*32;ctx.lineTo(x,y);}ctx.stroke();}}
+          ctx.restore();
           for(const rock of a.rocks){
             if(rock.falling){ctx.save();const yy=rock.y+Math.min(260,(rock.fallT||0)*320);ctx.translate(rock.x,yy);ctx.rotate(time*2);ctx.fillStyle='#716e68';ctx.strokeStyle='#b8b3a8';ctx.lineWidth=4;ctx.beginPath();ctx.moveTo(-25,-16);ctx.lineTo(-8,-34);ctx.lineTo(21,-24);ctx.lineTo(29,9);ctx.lineTo(4,27);ctx.lineTo(-25,13);ctx.closePath();ctx.fill();ctx.stroke();ctx.restore();}
             if(rock.fly){ctx.save();ctx.translate(rock.fly.x,rock.fly.y);ctx.rotate(rock.fly.t*9);ctx.fillStyle='#8b8274';ctx.strokeStyle='#d8d0bd';ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(-18,-13);ctx.lineTo(-5,-25);ctx.lineTo(18,-15);ctx.lineTo(23,8);ctx.lineTo(2,22);ctx.lineTo(-20,12);ctx.closePath();ctx.fill();ctx.stroke();ctx.restore();}
