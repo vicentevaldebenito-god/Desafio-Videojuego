@@ -874,7 +874,12 @@
         const imp = has('implo');
         const R = 125 * (1 + 0.35 * imp), dmg = 55 * (1 + 0.5 * imp);
         boomFx(c.x, c.y, R, '#7fe9ff', '#1fa89a');
-        areaDamage(c.x, c.y, R, dmg, 520);
+        // Las nubes de dash nunca dañan jefes: evita saltarse la fase de desesperación.
+        for (const e of enemies) {
+          if (e.dead || e.boss || e.spawnT > 0) continue;
+          const d = dist(c.x, c.y, e.x, e.y);
+          if (d < R + e.r) { const falloff = 1 - 0.5 * clamp(d / R, 0, 1); hurtEnemy(e, dmg * falloff, { ignoreArmor: true }); const a = Math.atan2(e.y-c.y,e.x-c.x); e.vx += Math.cos(a)*520; e.vy += Math.sin(a)*520; }
+        }
         for (const o of clouds) if (!o.dead && o !== c && dist(o.x, o.y, c.x, c.y) < R + 60 && o.fuse < 0) o.fuse = 0.12;
         if (has('acid')) pools.push({ x: c.x, y: c.y, r: 95, life: 4.5, t: 0 });
         P.pressure = Math.max(0, P.pressure - 15);
@@ -1500,7 +1505,7 @@
         } else {
           e.despLock = true; e.despTimer = 0; e.despStage = 0; e.escape = 0;
           e.despLights = null; e.hitDone = false; e.vx = 0; e.vy = 0; e.st = 1.1;
-          e.state = bfl() === 1 ? 'desp_chase' : 'desp_inhale';
+          e.state = bfl() === 1 ? 'desp_chase_telegraph' : 'desp_inhale';
           if (bfl() === 2) inkT = 5;
           banner = { t: 2.4, max: 2.4, l1: 'DESESPERACIÓN · ' + e.despCycles + '/4', l2: '¡SOBREVIVE A LA SIGUIENTE RONDA!' };
           ring(e.x,e.y,170,'#ff3b4a',0.55,5); AudioSys.sfx('roar');
@@ -1527,18 +1532,21 @@
         // Fases finales de los dos primeros jefes: la vida queda bloqueada en 1 HP.
         if (e.boss && (bfl() === 1 || bfl() === 2) && !e.despFinished && !e.despLock && e.hp <= e.maxHp * 0.12) {
           e.hp = 1; e.despLock = true; e.despStage = 0; e.despTimer = 0;
-          e.state = bfl() === 1 ? 'desp_chase' : 'desp_inhale';
+          e.state = bfl() === 1 ? 'desp_chase_telegraph' : 'desp_inhale';
           e.despCycles = 0; e.despLights = null; e.hitDone = false;
           banner = { t: 3, max: 3, l1: 'FASE DE DESESPERACIÓN', l2: 'SOBREVIVE A SU ÚLTIMO ATAQUE' };
           ebullets.length = 0; shake(20); AudioSys.sfx('roar');
         }
         if (e.boss && e.despLock && !e.despFinished) {
           if (bfl() === 1) {
-            if (e.state === 'desp_chase') {
-              steerDir(e, toP, 720, 2400, dt);
-              if (dP < e.r + target.r + 4 && e.hitCd <= 0) { hurtEnemyTargetPlayer(target, 25, toP); e.hitCd = 0.65; }
+            if (e.state === 'desp_chase_telegraph') {
+              decel(e, dt, 3200); e.despTimer += dt; e.face = toP;
+              if (e.despTimer >= 1.35) { e.state = 'desp_chase'; e.despTimer = 0; e.hitCd = 0; e.despStartX = e.x; e.despStartY = e.y; }
+            } else if (e.state === 'desp_chase') {
+              steerDir(e, toP, 510, 1550, dt);
+              if (dP < e.r + target.r + 10 && e.hitCd <= 0) { hurtEnemyTargetPlayer(target, 18, toP); e.hitCd = 1.0; }
               e.despTimer += dt;
-              if (e.despTimer >= 5.2) { e.despStage = 0; e.state = 'desp_line_telegraph'; e.despTimer = 0; }
+              if (e.despTimer >= 4.0) { e.despStage = 0; e.state = 'desp_line_telegraph'; e.despTimer = 0; }
             } else if (e.state === 'desp_line_telegraph') {
               decel(e, dt, 3000); e.despTimer += dt;
               e.despY = clamp(target.y, WALL + 45, H - WALL - 45);
