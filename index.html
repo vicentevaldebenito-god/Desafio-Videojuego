@@ -1631,13 +1631,14 @@
               if (e.despTimer >= 4.0) { e.despStage = 0; e.state = 'desp_line_telegraph'; e.despTimer = 0; }
             } else if (e.state === 'desp_line_telegraph') {
               decel(e, dt, 3000); e.despTimer += dt;
-              e.despY = clamp(target.y, WALL + 45, H - WALL - 45);
-              if (e.despTimer >= 1.55) { e.x = e.despStage % 2 ? W - WALL - 30 : WALL + 30; e.y = e.despY; e.state = 'desp_line_dash'; e.despTimer = 0; e.despDir = e.despStage % 2 ? -1 : 1; }
+              e.despY = clamp(target.y, arenaB.t + 45, arenaB.b - 45);
+              if (e.despTimer >= 1.55) { e.despDir = e.despStage % 2 ? -1 : 1; e.x = e.despDir > 0 ? arenaB.l + 32 : arenaB.r - 32; e.y = e.despY; e.vx=0; e.vy=0; e.state = 'desp_line_dash'; e.despTimer = 0; }
             } else if (e.state === 'desp_line_dash') {
               e.face = e.despDir > 0 ? 0 : Math.PI; e.vis=e.face; e.despSwim=(e.despSwim||0)+dt*26;
               const oldX = e.x; e.x += e.despDir * 1500 * dt; e.y = e.despY;
               if (target === P && Math.abs(target.y - e.despY) < target.r + e.r * 0.45 && target.x >= Math.min(oldX,e.x)-target.r && target.x <= Math.max(oldX,e.x)+target.r && e.hitCd <= 0) { hurtEnemyTargetPlayer(target, 32, 0); e.hitCd = 0.7; }
-              if (e.x < WALL - 60 || e.x > W + 60) { e.despStage++; if (e.despStage < 3) { e.state = 'desp_line_telegraph'; e.despTimer = 0; } else { e.state = 'desp_algae'; e.despTimer = 0; e.escape = 0; } }
+              const reachedEdge = e.despDir > 0 ? e.x >= arenaB.r - 8 : e.x <= arenaB.l + 8;
+              if (reachedEdge) { e.x = e.despDir > 0 ? arenaB.r - 8 : arenaB.l + 8; e.vx=0; e.vy=0; e.despStage++; if (e.despStage < 3) { e.state = 'desp_line_telegraph'; e.despTimer = 0; } else { e.state = 'desp_algae'; e.despTimer = 0; e.escape = 0; } }
             } else if (e.state === 'desp_algae') {
               e.despTimer += dt;
               if (target === P && !P.dead) {
