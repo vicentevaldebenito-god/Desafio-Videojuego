@@ -31,5 +31,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: abyssal-simulation-report
-          path: abyssal-simulation-report.json
+          path: |
+            abyssal-simulation-report.json
+            biome-screenshots/
           if-no-files-found: ignore
