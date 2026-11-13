@@ -84,7 +84,7 @@ def main():
     injection_point = original.rfind(needle)
     if injection_point < 0:
         raise SystemExit("Could not safely instrument the game bootstrap for isolated tests.")
-    instrumented = original[:injection_point] + TEST_API + "\\n" + original[injection_point:]
+    instrumented = original[:injection_point] + TEST_API + original[injection_point:]
     if SHOTS.exists():
         shutil.rmtree(SHOTS)
     SHOTS.mkdir(parents=True)
