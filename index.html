@@ -944,7 +944,7 @@
 
       function spawnPos(r) {
         for (let i = 0; i < 60; i++) {
-          const x = rand(WALL + 40, roomroomW - WALL - 40), y = rand(WALL + 40, roomroomH - WALL - 40);
+          const x = rand(WALL + 40, roomW - WALL - 40), y = rand(WALL + 40, roomH - WALL - 40);
           if (!pointInSolid(x, y, r + 10) && dist(x, y, P.x, P.y) > (i < 40 ? 320 : 180)) return { x, y };
         }
         return { x: roomW / 2, y: roomH / 2 };
@@ -1830,7 +1830,7 @@
           }
         }
         const bait = enemies.find(b => b.type === 'bait' && !b.dead), wAng = bait ? Math.atan2(bait.y - e.y, bait.x - e.x) : toP;
-        const xl = k => { const m = WALL + 70; return k === 0 ? [m, m, roomW - m, roomH - m] : [W - m, m, m, H - m]; };
+        const xl = k => { const m = WALL + 70; return k === 0 ? [m, m, roomW - m, roomH - m] : [roomW - m, m, m, roomH - m]; };
         const next = () => {
           const r = Math.random(), k = enr ? 1 : 0;
           const X = () => { e.state = 'xt'; e.n = 0; e.tl = [xl(0), xl(1)]; e.x = e.tl[0][0]; e.y = e.tl[0][1]; e.st = enr ? 0.7 : 0.9; ring(e.x, e.y, 120, '#ff3b4a', 0.4, 5); };
