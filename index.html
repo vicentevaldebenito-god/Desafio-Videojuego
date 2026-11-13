@@ -57,9 +57,14 @@
       const SAVE_KEY = 'abyssal_recoil_scores_v1';
 
       const THEMES = [
-        { name: 'ZONA DE MAREA', accent: '#2ee6ff', accent2: '#37ffb0', floor: '#050b14', wall: '#13233b' },
-        { name: 'CÁMARAS TÓXICAS', accent: '#7dff6a', accent2: '#ffe94a', floor: '#04120d', wall: '#14301f' },
-        { name: 'LA FOSA ABISAL', accent: '#ff4fd8', accent2: '#ff3b4a', floor: '#0e0716', wall: '#2a1236' }
+        { name: 'ARRECIFE DE LA MAREA', biome: 'reef', accent: '#37d9e8', accent2: '#f2b86b', floor: '#061722', wall: '#15384a', rock: '#24566a', deep: '#020b13' },
+        { name: 'JARDINES DE LA BILIS', biome: 'toxic', accent: '#a6ff55', accent2: '#e8d35b', floor: '#07170f', wall: '#173b25', rock: '#31543a', deep: '#020b08' },
+        { name: 'TRINCHERA BASÁLTICA', biome: 'trench', accent: '#63b8e8', accent2: '#8c91c7', floor: '#080f1d', wall: '#18283c', rock: '#26374d', deep: '#02040b' },
+        { name: 'CATEDRAL SUMERGIDA', biome: 'cathedral', accent: '#e7c77d', accent2: '#7cb9c8', floor: '#101722', wall: '#303d4a', rock: '#53606a', deep: '#05090f' },
+        { name: 'CAMPOS FUMARÓLICOS', biome: 'smokers', accent: '#ff985b', accent2: '#59d5c2', floor: '#1a100e', wall: '#3e2922', rock: '#514039', deep: '#090605' },
+        { name: 'BOSQUE DE KELP', biome: 'kelp', accent: '#4ee0a0', accent2: '#b5e66f', floor: '#041a19', wall: '#103d38', rock: '#1c5047', deep: '#010c0d' },
+        { name: 'GLACIAR DE PRISMAS', biome: 'glacier', accent: '#9deaff', accent2: '#b7a8ff', floor: '#091a2c', wall: '#23445c', rock: '#47728d', deep: '#020916' },
+        { name: 'CEMENTERIO DEL LEVIATÁN', biome: 'grave', accent: '#e2a2a8', accent2: '#b8d5c8', floor: '#180f19', wall: '#382633', rock: '#67505c', deep: '#08060d' }
       ];
       const MAX_LEVEL = 50;
       const themeForFloor = () => THEMES[(Math.max(1, Math.floor(floorN || 1)) - 1) % THEMES.length] || THEMES[0];
