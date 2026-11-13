@@ -1354,17 +1354,17 @@
           // Al morir el jefe, elimina sus refuerzos y proyectiles restantes.
           for (const add of enemies) if (add !== e) add.dead = true;
           waveQueue.length = 0;
-          // Reinicio seguro de todos los efectos de combate antes de limpiar la sala.
+          // Reinicio de combate. Los arrays se vacían, pero se conserva su identidad:
+          // la muerte puede ocurrir dentro del bucle que está actualizando esos mismos proyectiles.
           bullets.length = 0; ebullets.length = 0; clouds.length = 0; flares.length = 0; pools.length = 0; xwList.length = 0; orbs.length = 0;
           pings.length = 0; texts = texts.filter(t => t && t.t > 0);
           if (amalEncounter && amalEncounter.phase === 'arena') { amalEncounter = null; amalMusicButton.style.display = 'none'; if (amalMusic) amalMusic.pause(); }
-          if (typeof parryT !== 'undefined') parryT = 0;
           if (typeof parryT !== 'undefined') parryT = 0;
           if (typeof parryCd !== 'undefined') parryCd = 0;
           boomFx(e.x, e.y, 220, col, '#3bd98a'); shake(24); hitstop = 0.3; AudioSys.sfx('boom', true); AudioSys.sfx('kill');
           // Sin timeouts de explosión: evitamos efectos atrasados que se disparen en la sala siguiente.
           for (let i = 0; i < 6; i++) pickups.push({ x: e.x + rand(-40, 40), y: e.y + rand(-40, 40), vx: rand(-120, 120), vy: rand(-120, 120), heal: 12, t: 0 });
-          ebullets.forEach(b => spark(b.x, b.y, 3, '#ff4fd8', 150)); ebullets = []; for (const o of enemies) if (o.type === 'bait') o.dead = true;
+          for (const o of enemies) if (o.type === 'bait') o.dead = true;
         } else {
           blood(e.x, e.y, e.type === 'tank' ? 22 : 12, e.type === 'tank' ? '#8a7a20' : '#1fa89a', null, 300);
           spark(e.x, e.y, 8, col, 300); bubbles(e.x, e.y, 6, e.r);
@@ -1578,7 +1578,7 @@
               if (e.cd <= 0 && dT < 620) { e.state = 'dash'; e.st = 0.48; e.cA = toT; e.cd = 2.8; ring(e.x, e.y, e.r * 2, '#ff3b4a', 0.35, 3); }
             } else {
               steerDir(e, toT + Math.sin(e.t * 2.2) * 0.9, e.speed * (wander ? 0.5 : 1), 1500, dt);
-              if (e.cd <= 0) for (const b of bullets) if (dist(b.x, b.y, e.x, e.y) < 110) { e.state = 'dash'; e.st = 0.22; e.cA = Math.atan2(b.y - e.y, b.x - e.x) + (Math.random() < 0.5 ? 1 : -1) * Math.PI / 2; e.cd = 0.9; ring(e.x, e.y, e.r * 2, '#c46bff', 0.25, 2); break; }
+              if (e.cd <= 0) for (const b of bullets) if (b && dist(b.x, b.y, e.x, e.y) < 110) { e.state = 'dash'; e.st = 0.22; e.cA = Math.atan2(b.y - e.y, b.x - e.x) + (Math.random() < 0.5 ? 1 : -1) * Math.PI / 2; e.cd = 0.9; ring(e.x, e.y, e.r * 2, '#c46bff', 0.25, 2); break; }
             }
           }
           if (!wander) contactAttack(e, ET.dodger.dmg, tgt, 0.8);
@@ -2061,7 +2061,10 @@
          --------------------------------------------------------------------- */
       function updateBullets(dt) {
         for (let i = bullets.length - 1; i >= 0; i--) {
-          const b = bullets[i]; let keep = true;
+          // Un jefe puede vaciar bullets desde hurtEnemy() durante este mismo recorrido.
+          if (i >= bullets.length) continue;
+          const b = bullets[i]; if (!b) continue;
+          let keep = true;
           if (b.type === 'harpoon') keep = updateHarpoon(b, dt);
           else if (b.type === 'acid') {
             b.life -= dt;
@@ -2092,12 +2095,19 @@
             if (keep && b.life <= 0) { makeFlare(b.x, b.y, null); keep = false; }
             if (keep && Math.random() < 0.6) addP({ kind: 'ember', x: b.x, y: b.y, vx: rand(-30, 30), vy: rand(-30, 30), life: 0.3, size: 3, color: '#e8ff4a' });
           }
-          if (!keep) { bullets[i] = bullets[bullets.length - 1]; bullets.pop(); }
+          if (!keep && i < bullets.length) {
+            const last = bullets.length - 1;
+            if (i !== last) bullets[i] = bullets[last];
+            bullets.pop();
+          }
         }
       }
       function updateEBullets(dt) {
         for (let i = ebullets.length - 1; i >= 0; i--) {
-          const b = ebullets[i]; let kill = false;
+          // Los proyectiles reflejados pueden matar al jefe y vaciar ebullets aquí mismo.
+          if (i >= ebullets.length) continue;
+          const b = ebullets[i]; if (!b) continue;
+          let kill = false;
           if (b.homing) {
             const target = mpNearestEnemyTarget(b);
             if (target) { const a=Math.atan2(target.y-b.y,target.x-b.x), cur=Math.atan2(b.vy,b.vx), next=cur+clamp(angDiff(a,cur),-b.turn*dt,b.turn*dt), sp=Math.hypot(b.vx,b.vy)||230; b.vx=Math.cos(next)*sp; b.vy=Math.sin(next)*sp; }
@@ -2129,7 +2139,11 @@
               spark(b.x, b.y, 6, b.col, 220);
             }
           }
-          if (kill) { ebullets[i] = ebullets[ebullets.length - 1]; ebullets.pop(); }
+          if (kill && i < ebullets.length) {
+            const last = ebullets.length - 1;
+            if (i !== last) ebullets[i] = ebullets[last];
+            ebullets.pop();
+          }
         }
       }
       function updateClouds(dt) {
@@ -3170,7 +3184,7 @@
             if (dd < tg.r + 12 * (b.big || 1) && b.cd <= 0) { hurtEnemy(tg, 24 * (b.big || 1), { ang: Math.atan2(tg.y - b.y, tg.x - b.x) }); b.cd = 0.4; spark(b.x, b.y, 3, '#6ae0ff', 160); }
           } else { b.a += dt * 2; b.x += (P.x + Math.cos(b.a) * 50 - b.x) * Math.min(1, dt * 6); b.y += (P.y + Math.sin(b.a) * 50 - b.y) * Math.min(1, dt * 6); }
         } bots = bots.filter(b => b.t > 0);
-        for (const b of ebullets) if (b.fr && b.home) { const t = enemies.filter(e => !e.dead && e.spawnT <= 0).sort((a, c) => dist(a.x, a.y, b.x, b.y) - dist(c.x, c.y, b.x, b.y))[0]; if (t) { const sp = Math.hypot(b.vx, b.vy) || 300, a0 = Math.atan2(b.vy, b.vx), na = a0 + clamp(angDiff(Math.atan2(t.y - b.y, t.x - b.x), a0), -6 * dt, 6 * dt); b.vx = Math.cos(na) * sp; b.vy = Math.sin(na) * sp; } }
+        for (const b of ebullets) if (b && b.fr && b.home) { const t = enemies.filter(e => !e.dead && e.spawnT <= 0).sort((a, c) => dist(a.x, a.y, b.x, b.y) - dist(c.x, c.y, b.x, b.y))[0]; if (t) { const sp = Math.hypot(b.vx, b.vy) || 300, a0 = Math.atan2(b.vy, b.vx), na = a0 + clamp(angDiff(Math.atan2(t.y - b.y, t.x - b.x), a0), -6 * dt, 6 * dt); b.vx = Math.cos(na) * sp; b.vy = Math.sin(na) * sp; } }
         for (const o of orbs) { o.t += dt; if (o.t < 0.35) { o.x += o.vx * dt; o.y += o.vy * dt; o.vx *= 0.92; o.vy *= 0.92; } else { const d = dist(o.x, o.y, P.x, P.y) || 1, sp = Math.min(1100, 250 + (o.t - 0.35) * 900); o.x += (P.x - o.x) / d * sp * dt; o.y += (P.y - o.y) / d * sp * dt; if (d < 18) { addXP(o.v); o.dead = true; if (time - orbSnd > 0.07) { orbSnd = time; AudioSys.sfx('coin'); } } } } orbs = orbs.filter(o => !o.dead);
         for (const f of feats) {
           f.t += dt; const d = dist(P.x, P.y, f.x, f.y);
@@ -3824,6 +3838,7 @@ maxRank = Math.max(maxRank, sr()); ambT -= dt; if (ambT <= 0) { ambT = rand(9, 2
           if(k>.94){ctx.save();ctx.globalAlpha=(k-.94)/.06;ctx.fillStyle='#fff';ctx.fillRect(0,0,W,H);ctx.restore();}
         }
         for (const b of bullets) {
+          if (!b) continue;
           if (b.type === 'harpoon') {
             const c = Math.cos(b.a), s = Math.sin(b.a);
             const jx = b.stuck ? rand(-1, 1) * b.vib * 2 : 0, jy = b.stuck ? rand(-1, 1) * b.vib * 2 : 0;
@@ -3867,6 +3882,7 @@ maxRank = Math.max(maxRank, sr()); ambT -= dt; if (ambT <= 0) { ambT = rand(9, 2
 
       function drawEBullets() {
         for (const b of ebullets) {
+          if (!b) continue;
           ctx.fillStyle = b.fr ? '#fffbb0' : '#ffd0f4'; ctx.beginPath(); ctx.arc(b.x, b.y, b.r * 0.55, 0, TAU); ctx.fill();
           addGlow(b.x, b.y, b.homing ? b.r * 4.4 : b.r * 3.2, b.col, 0.85);
         }
@@ -3979,7 +3995,7 @@ maxRank = Math.max(maxRank, sr()); ambT -= dt; if (ambT <= 0) { ambT = rand(9, 2
         for (const c of clouds) hole(c.x, c.y, 130, 0.7);
         for (const pl of pools) hole(pl.x, pl.y, pl.r * 1.6, 0.6);
         for (const l of lights) { const b = Math.pow(Math.max(0, Math.sin(time * l.rate + l.ph)), 2); if (b > 0.05) hole(l.x, l.y, 220, b * 0.55); }
-        for (const b of bullets) if (b.type === 'harpoon' && !b.stuck) hole(b.x, b.y, 120, 0.5);
+        for (const b of bullets) if (b && b.type === 'harpoon' && !b.stuck) hole(b.x, b.y, 120, 0.5);
         for (const p of parts) if (p.kind === 'flash') hole(p.x, p.y, p.size * 2, p.life / p.max);
         if (secret && !secret.found && P.revealT > 0) hole(secret.x, secret.y, 90, 0.8);
         lctx.globalCompositeOperation = 'source-over';
@@ -4317,7 +4333,7 @@ maxRank = Math.max(maxRank, sr()); ambT -= dt; if (ambT <= 0) { ambT = rand(9, 2
         parryCd = Math.max(0, parryCd - dt); if (P.stagger > 0) P.stagger -= dt;
         if (!pressed.KeyF || (P.char || 0) !== 0 || P.dead || parryCd > 0 || mpNearDownedTeammate()) return;
         let got = 0, near = false;
-        for (const b of ebullets) { if (b.fr) continue; const d = dist(b.x, b.y, P.x, P.y); if (d < 78 * (1 + 0.4 * has('pbig')) * (P.char === 0 && P.path === 'A' ? 1 + 0.25 * P.tier : 1)) { b.fr = true; if (has('phome')) b.home = true; b.vx *= -1.5; b.vy *= -1.5; b.col = '#e8ff4a'; b.life = 3; b.dmg = Math.max(b.dmg * 2, 24); got++; spark(b.x, b.y, 8, '#ffffff', 260); } else if (d < 190) near = true; }
+        for (const b of ebullets) { if (!b || b.fr) continue; const d = dist(b.x, b.y, P.x, P.y); if (d < 78 * (1 + 0.4 * has('pbig')) * (P.char === 0 && P.path === 'A' ? 1 + 0.25 * P.tier : 1)) { b.fr = true; if (has('phome')) b.home = true; b.vx *= -1.5; b.vy *= -1.5; b.col = '#e8ff4a'; b.life = 3; b.dmg = Math.max(b.dmg * 2, 24); got++; spark(b.x, b.y, 8, '#ffffff', 260); } else if (d < 190) near = true; }
         if (got) { if (P.path === 'B') { const nB = 6 + 2 * P.tier; for (let i = 0; i < nB; i++) enemyShoot({ x: P.x, y: P.y, r: 0 }, i * TAU / nB, 420, 30, true); } if (has('pheal')) P.hp = Math.min(P.maxHp, P.hp + 4 * has('pheal') * got); parryCd = 0.15; addStyle(14 + got * 6, 'PARRY'); hitstop = Math.max(hitstop, 0.08); shake(8); ring(P.x, P.y, 90, '#ffffff', 0.3, 4); AudioSys.sfx('parry'); floatText('¡PARRY! x' + got, P.x, P.y - 40, '#ffe94a', 20); P.iframes = Math.max(P.iframes, 0.25); }
         else if (near) { parryCd = 0.9; P.stagger = 0.7; style = Math.max(0, style - 30); AudioSys.sfx('parryfail'); floatText('PARRY FALLIDO', P.x, P.y - 40, '#ff5a5a', 16); ring(P.x, P.y, 50, '#ff5a5a', 0.25, 3); }
       }
