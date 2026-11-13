@@ -1,0 +1,35 @@
+name: ABYSSAL REDO - Full Browser Simulation
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  browser-simulation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install Playwright
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install playwright
+          python -m playwright install --with-deps chromium
+      - name: Run full browser simulation
+        run: python tests/abyssal_simulation.py
+      - name: Upload simulation report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: abyssal-simulation-report
+          path: abyssal-simulation-report.json
+          if-no-files-found: ignore
