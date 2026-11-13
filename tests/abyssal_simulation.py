@@ -80,9 +80,11 @@ def main():
         raise SystemExit(f"Missing game file: {HTML}")
     original = HTML.read_text(encoding="utf-8")
     needle = "      requestAnimationFrame(frame);"
-    if original.count(needle) != 1:
-        raise SystemExit("Could not safely instrument the game loop for isolated tests.")
-    instrumented = original.replace(needle, TEST_API + "\n" + needle)
+    # The frame loop also schedules itself earlier; instrument only the final bootstrap call.
+    injection_point = original.rfind(needle)
+    if injection_point < 0:
+        raise SystemExit("Could not safely instrument the game bootstrap for isolated tests.")
+    instrumented = original[:injection_point] + TEST_API + "\\n" + original[injection_point:]
     if SHOTS.exists():
         shutil.rmtree(SHOTS)
     SHOTS.mkdir(parents=True)
