@@ -94,6 +94,8 @@ def main():
         page_errors,console_errors=[],[]
         page.on("pageerror",lambda e:page_errors.append(str(e)))
         page.on("console",lambda m:console_errors.append(m.text) if m.type=="error" else None)
+        # about:blank is not a secure context in Chromium, so provide a test-only UUID shim.
+        page.add_init_script("""(() => { let id=0; if (!crypto.randomUUID) Object.defineProperty(crypto,'randomUUID',{value:()=>String(++id).padStart(8,'0')+'-test-uuid'}); })();""")
         page.set_content(instrumented,wait_until="load")
         page.wait_for_selector("#game")
         record("HTML loads and canvas exists",page.locator("#game").count()==1,page.title())
