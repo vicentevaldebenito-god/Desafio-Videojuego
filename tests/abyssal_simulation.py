@@ -86,7 +86,7 @@ def main():
     instrumented = original[:injection_point] + TEST_API + "\n" + original[injection_point:]
     # Shim secure-context-only UUID API before the game's first script executes.
     uuid_shim = "<script>Object.defineProperty(window.crypto,'randomUUID',{configurable:true,value:(()=>{let id=0;return()=>String(++id)+'-test-uuid'})()});</script>"
-    instrumented = instrumented.replace("<script>", uuid_shim + "\\n  <script>", 1)
+    instrumented = instrumented.replace("<script>", uuid_shim + "\n  <script>", 1)
     if SHOTS.exists():
         shutil.rmtree(SHOTS)
     SHOTS.mkdir(parents=True)
