@@ -138,6 +138,14 @@
         roomW = Math.max(W, Math.round(W * s / 64) * 64);
         roomH = Math.max(H, Math.round(H * s / 64) * 64);
         roomCamera.x = roomW / 2; roomCamera.y = roomH / 2;
+        // Redistribuye las partículas ambientales por todo el mapa, no solo por el lienzo inicial.
+        if (Array.isArray(motes)) {
+          motes.length = 0;
+          const moteCount = Math.round(70 * Math.min(2, Math.sqrt((roomW * roomH) / (W * H))));
+          for (let i = 0; i < moteCount; i++) {
+            motes.push({ x: rand(WALL + 20, roomW - WALL - 20), y: rand(WALL + 20, roomH - WALL - 20), r: rand(5, 14), v: rand(3, 14), sp: rand(0.3, 1), ph: rand(0, 6), col: pick(['#2ee6ff', '#37ffb0', '#ffe94a', '#2ee6ff']) });
+          }
+        }
       }
       function currentWorldCamera(target = null) {
         if (amalCameraActive()) return amalCamera;
@@ -2167,7 +2175,7 @@
         }
         flares = flares.filter(f => f.life > 0);
         for (const pg of pings) { pg.t += dt; pg.r = pg.t * 1100; }
-        pings = pings.filter(p => p.r < W);
+        pings = pings.filter(p => p.r < Math.max(roomW, roomH));
       }
       function updatePickups(dt) {
         if (MP && MP.connected && !MP.isHost) {
@@ -3921,7 +3929,7 @@ maxRank = Math.max(maxRank, sr()); ambT -= dt; if (ambT <= 0) { ambT = rand(9, 2
         ctx.fillStyle = '#233b57'; ctx.fillRect(x, 0, w / 2 * (1 - o), WALL - 2); ctx.fillRect(x + w - w / 2 * (1 - o), 0, w / 2 * (1 - o), WALL - 2);
         ctx.fillStyle = 'rgba(0,0,0,0.4)'; for (let i = 0; i < 6; i++) ctx.fillRect(x + i * 24, 4, 3, WALL - 10);
         ctx.strokeStyle = o > 0.5 ? '#7dff6a' : '#ff3b4a'; ctx.lineWidth = 2; ctx.strokeRect(x + 1, 1, w - 2, WALL - 4);
-        addGlow(W / 2, WALL - 6, 80, o > 0.5 ? '#7dff6a' : '#ff3b4a', 0.25 + 0.15 * o);
+        addGlow(roomW / 2, WALL - 6, 80, o > 0.5 ? '#7dff6a' : '#ff3b4a', 0.25 + 0.15 * o);
       }
       function drawLightsAndAmbient() {
         for (const l of lights) {
@@ -3935,8 +3943,10 @@ maxRank = Math.max(maxRank, sr()); ambT -= dt; if (ambT <= 0) { ambT = rand(9, 2
       }
       function drawCaustics() {
         ctx.save(); ctx.globalCompositeOperation = 'lighter';
-        for (let i = 0; i < 6; i++) {
-          const x = (i * 260 + time * 14 + Math.sin(time * 0.4 + i) * 60) % (roomW + 200) - 100, y = (100 + i * 100 + Math.sin(time * 0.6 + i * 2) * 40) % roomH;
+        const areaRatio = (roomW * roomH) / (W * H), count = Math.round(6 * Math.min(2.2, Math.sqrt(areaRatio)));
+        for (let i = 0; i < count; i++) {
+          const x = (i * 260 + time * 14 + Math.sin(time * 0.4 + i) * 60) % (roomW + 200) - 100;
+          const y = (i * roomH / count + time * 5 + Math.sin(time * 0.6 + i * 2) * 40) % roomH;
           const g = ctx.createRadialGradient(x, y, 0, x, y, 150); g.addColorStop(0, 'rgba(60,160,220,0.035)'); g.addColorStop(1, 'rgba(60,160,220,0)');
           ctx.fillStyle = g; ctx.fillRect(x - 150, y - 150, 300, 300);
         }
