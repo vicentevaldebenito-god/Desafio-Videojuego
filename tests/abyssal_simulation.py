@@ -84,6 +84,9 @@ def main():
     if injection_point < 0:
         raise SystemExit("Could not safely find the end of the game IIFE for isolated tests.")
     instrumented = original[:injection_point] + TEST_API + "\n" + original[injection_point:]
+    # Shim secure-context-only UUID API before the game's first script executes.
+    uuid_shim = "<script>Object.defineProperty(window.crypto,'randomUUID',{configurable:true,value:(()=>{let id=0;return()=>String(++id)+'-test-uuid'})()});</script>"
+    instrumented = instrumented.replace("<script>", uuid_shim + "\\n  <script>", 1)
     if SHOTS.exists():
         shutil.rmtree(SHOTS)
     SHOTS.mkdir(parents=True)
@@ -94,8 +97,6 @@ def main():
         page_errors,console_errors=[],[]
         page.on("pageerror",lambda e:page_errors.append(str(e)))
         page.on("console",lambda m:console_errors.append(m.text) if m.type=="error" else None)
-        # about:blank is not a secure context in Chromium, so provide a test-only UUID shim.
-        page.add_init_script("""(() => { let id=0; if (!crypto.randomUUID) Object.defineProperty(crypto,'randomUUID',{value:()=>String(++id).padStart(8,'0')+'-test-uuid'}); })();""")
         page.set_content(instrumented,wait_until="load")
         page.wait_for_selector("#game")
         record("HTML loads and canvas exists",page.locator("#game").count()==1,page.title())
