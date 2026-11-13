@@ -2584,18 +2584,56 @@
         [['Abismo', floorN + (loop ? ' (bucle ' + (loop + 1) + ')' : '')], ['Nivel', level], ['Bajas', kills], ['Rango máx.', RL[maxRank]], ['Órganos', organs], ['Mejoras', P.hist.length]].forEach((r, i) => { txt(r[0], x + 20, y + 66 + i * 26, 14, '#cfe0f0', 'left'); txt(String(r[1]), x + 290, y + 66 + i * 26, 14, '#fff', 'right'); });
         txt('BUILD', x + 20, y + 240, 13, '#ffe94a', 'left'); P.hist.slice(-8).forEach((h, i) => txt(h.name, x + 20, y + 264 + i * 18, 11, h.col || '#cfe0f0', 'left'));
       }
+
       function applyLayout(boss) {
         if (boss || (cell.type !== 'combat' && cell.type !== 'start')) return;
-        // En cooperativo dejamos más espacio libre para que todos puedan moverse.
         if (MP && MP.connected && MP.players > 1) return;
-        const k = Math.floor(Math.random() * 6), o = [], sx = roomW / W, sy = roomH / H, rc = (x, y, w, h) => o.push({ x: x * sx, y: y * sy, w: w * sx, h: h * sy });
-        if (k === 0) return;
-        if (k === 1) { rc(300, 200, 90, 90); rc(890, 200, 90, 90); rc(300, 430, 90, 90); rc(890, 430, 90, 90); }
-        else if (k === 2) { rc(200, 250, 360, 50); rc(720, 420, 360, 50); }
-        else if (k === 3) { for (let i = 0; i < 8; i++) { const a = i * TAU / 8; rc(640 + Math.cos(a) * 190 - 35, 330 + Math.sin(a) * 140 - 35, 70, 70); } }
-        else if (k === 4) { rc(560, 150, 160, 40); rc(560, 500, 160, 40); rc(250, 320, 40, 120); rc(990, 320, 40, 120); }
-        else { rc(180, 150, 120, 120); rc(980, 150, 120, 120); rc(580, 300, 120, 120); rc(180, 450, 120, 120); rc(980, 450, 120, 120); }
-        obstacles.length = 0; for (const q of o) obstacles.push(q); bakeBG();
+        const k = Math.floor(Math.random() * 3), o = [], sx = roomW / W, sy = roomH / H;
+        const rc = (x,y,w,h) => o.push({x:x*sx,y:y*sy,w:w*sx,h:h*sy});
+        if (floorN === 1) {
+          // Reef shelves: branching coral clusters around a sandy center.
+          if(k===0){rc(165,165,135,100);rc(980,170,135,100);rc(225,455,160,85);rc(900,455,160,85);}
+          else if(k===1){rc(165,285,105,165);rc(1010,205,105,145);rc(450,160,100,70);rc(760,480,135,70);}
+          else{rc(260,170,145,95);rc(875,170,145,95);rc(260,455,145,95);rc(875,455,145,95);rc(580,310,110,65);}
+        } else if (floorN === 2) {
+          // Toxic gardens: rounded vent colonies and bulbous pods.
+          if(k===0){for(let i=0;i<5;i++)rc(155+i*245,235+(i%2)*155,90,74);}
+          else if(k===1){rc(205,170,155,92);rc(920,170,155,92);rc(205,455,155,92);rc(920,455,155,92);rc(545,300,190,68);}
+          else{for(let i=0;i<4;i++){rc(220+i*280,155,82,115);rc(220+i*280,450,82,105);}}
+        } else if (floorN === 3) {
+          // Basalt trench: tall narrow columns create deep corridors.
+          if(k===0){rc(205,135,76,390);rc(1000,135,76,390);rc(435,250,68,180);rc(780,250,68,180);}
+          else if(k===1){for(let i=0;i<4;i++)rc(250+i*210,135+(i%2)*280,64,210);}
+          else{rc(210,155,108,170);rc(962,155,108,170);rc(210,400,108,155);rc(962,400,108,155);}
+        } else if (floorN === 4) {
+          // Cathedral ruins: paired pillars and broken transverse walls.
+          if(k===0){rc(250,150,88,105);rc(940,150,88,105);rc(250,465,88,95);rc(940,465,88,95);}
+          else if(k===1){rc(170,285,130,62);rc(980,285,130,62);rc(470,145,58,138);rc(750,430,58,138);}
+          else{rc(290,155,72,160);rc(920,155,72,160);rc(290,410,72,160);rc(920,410,72,160);rc(590,320,100,60);}
+        } else if (floorN === 5) {
+          // Smoker fields: broad volcanic chimneys, offset from the starting lane.
+          if(k===0){rc(215,165,102,128);rc(955,165,102,128);rc(405,420,112,108);rc(770,420,112,108);}
+          else if(k===1){rc(165,315,95,140);rc(1020,165,95,140);rc(555,155,145,95);rc(770,470,120,75);}
+          else{for(let i=0;i<5;i++)rc(150+i*245,175+(i%2)*270,72,104);}
+        } else if (floorN === 6) {
+          // Kelp forest: long thin stalks make the room feel grown rather than built.
+          if(k===0){rc(240,125,38,450);rc(470,160,34,380);rc(790,140,38,420);rc(1010,175,34,365);}
+          else if(k===1){rc(175,180,42,355);rc(395,125,38,430);rc(850,140,38,420);rc(1080,180,42,355);}
+          else{rc(235,135,40,420);rc(600,145,42,405);rc(965,135,40,420);}
+        } else if (floorN === 7) {
+          // Glacial prisms: wide angular blocks with clear lanes between them.
+          if(k===0){rc(205,165,135,82);rc(940,165,135,82);rc(415,420,135,85);rc(730,420,135,85);}
+          else if(k===1){rc(175,300,145,80);rc(960,300,145,80);rc(540,145,200,72);rc(540,465,200,72);}
+          else{rc(255,150,105,145);rc(920,150,105,145);rc(255,425,105,145);rc(920,425,105,145);rc(590,305,100,65);}
+        } else {
+          // Leviathan graveyard: rib fragments and vertebrae frame an open passage.
+          if(k===0){rc(185,150,92,165);rc(1000,150,92,165);rc(185,410,92,155);rc(1000,410,92,155);}
+          else if(k===1){rc(275,165,130,72);rc(875,165,130,72);rc(275,445,130,72);rc(875,445,130,72);rc(585,300,110,72);}
+          else{rc(175,270,150,65);rc(955,270,150,65);rc(420,150,72,125);rc(790,445,72,125);}
+        }
+        obstacles.length=0;
+        for(const q of o)obstacles.push(q);
+        bakeBG();
       }
 
       let cfg = { vol: 1, shake: 1, pres: 0, char: 0 }; try { const c0 = JSON.parse(localStorage.getItem('ar_cfg')); if (c0 && typeof c0.vol === 'number') cfg = Object.assign({ pres: 0, shake: 1, char: 0 }, c0); } catch (e) { }
