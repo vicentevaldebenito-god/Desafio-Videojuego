@@ -61,6 +61,8 @@
         { name: 'CÁMARAS TÓXICAS', accent: '#7dff6a', accent2: '#ffe94a', floor: '#04120d', wall: '#14301f' },
         { name: 'LA FOSA ABISAL', accent: '#ff4fd8', accent2: '#ff3b4a', floor: '#0e0716', wall: '#2a1236' }
       ];
+      const MAX_LEVEL = 50;
+      const themeForFloor = () => THEMES[(Math.max(1, Math.floor(floorN || 1)) - 1) % THEMES.length] || THEMES[0];
 
       const canvas = document.getElementById('game');
       let amalMusic = null, amalMusicUrl = null;
@@ -726,7 +728,7 @@
       }
       function genLights(boss) {
         lights = [];
-        const add = (x, y, side) => lights.push({ x, y, side, ph: rand(0, 6), rate: (boss ? 7 : rand(2.2, 4.2)), col: boss || Math.random() < 0.6 ? '#ff2d3d' : THEMES[floorN - 1].accent2 });
+        const add = (x, y, side) => lights.push({ x, y, side, ph: rand(0, 6), rate: (boss ? 7 : rand(2.2, 4.2)), col: boss || Math.random() < 0.6 ? '#ff2d3d' : themeForFloor().accent2 });
         [240, 640, 1040].forEach(x => { add(x, WALL - 4, 'top'); add(x, H - WALL + 4, 'bottom'); });
         add(WALL - 4, H / 2, 'left'); add(W - WALL + 4, H / 2, 'right');
       }
@@ -766,7 +768,7 @@
 
       /* Fondo estático horneado (suelo, paredes, obstáculos) */
       function bakeBG() {
-        const th = THEMES[floorN - 1];
+        const th = themeForFloor();
         bgCv = document.createElement('canvas'); bgCv.width = W; bgCv.height = H;
         const c = bgCv.getContext('2d');
         const g0 = c.createLinearGradient(0, 0, 0, H); g0.addColorStop(0, th.floor); g0.addColorStop(1, '#010308'); c.fillStyle = g0; c.fillRect(0, 0, W, H);
@@ -839,7 +841,7 @@
         inMini = cell.type === 'mini'; if (inMini) { waveQueue = [['mini']]; genObstacles(true); bakeBG(); }
         if (cell.cleared) waveQueue = [];
         rs = 'intro'; introT = 1.6; doorOpen = 0; clearT = 0; if (!waveQueue.length) { rs = 'cleared'; doorOpen = 1; }
-        banner = { t: 2.6, max: 2.6, l1: 'ABISMO ' + floorN + ' // ' + THEMES[floorN - 1].name, l2: boss ? '¡ALGO ENORME SE MUEVE EN LA OSCURIDAD!' : { combat: 'AGUAS INFESTADAS', start: 'CÁMARA DE DESCENSO', shop: 'LA GUARIDA DEL PULPO', secret: 'CÁMARA OLVIDADA', mini: 'DEPREDADOR', altar: 'ALTAR OSCURO' }[cell.type] };
+        banner = { t: 2.6, max: 2.6, l1: 'ABISMO ' + floorN + ' // ' + themeForFloor().name, l2: boss ? '¡ALGO ENORME SE MUEVE EN LA OSCURIDAD!' : { combat: 'AGUAS INFESTADAS', start: 'CÁMARA DE DESCENSO', shop: 'LA GUARIDA DEL PULPO', secret: 'CÁMARA OLVIDADA', mini: 'DEPREDADOR', altar: 'ALTAR OSCURO' }[cell.type] };
         fade = 1;
         if (amalFinalRoom && !cell.cleared) {
           obstacles = [
@@ -1259,17 +1261,20 @@
         if (e.bounty) { const bm = P.path === 'A' ? 1 + 0.6 * P.tier : P.path === 'B' ? 0.6 : 1; organs += Math.round(15 * bm); dropXP(e, 60 * bm); floatText('¡RECOMPENSA!', e.x, e.y - e.r - 20, '#ffd23f', 18); }
         if (e.af === 'volatile') { ring(e.x, e.y, 90, '#ff7a3b', 0.4, 5); for (let i = 0; i < 8; i++) enemyShoot(e, i * TAU / 8, 200, 8, false); }
         const pts = 0; kills++; if (e.type !== 'bait') { addStyle(e.boss ? 40 : e.mini ? 25 : 5, e.boss || e.mini ? 'BOSS' : 'KILL'); dropXP(e, e.boss ? 200 : e.mini ? 50 : 5); P.dashCd = Math.max(0, P.dashCd - 0.35); meta.kills++; meta.t[e.type] = (meta.t[e.type] || 0) + 1; streak = Math.min(15, streak + 1); streakT = 4; }
-        const col = ET[e.type].color;
+        const col = (ET[e.type] && ET[e.type].color) || '#8fd8ff';
         if (e.boss) {
           // Al morir el jefe, elimina sus refuerzos y proyectiles restantes.
           for (const add of enemies) if (add !== e) add.dead = true;
           waveQueue.length = 0;
-          // Limpieza total al morir un jefe: evita que proyectiles reflejados del Eco/parry queden flotando en la sala siguiente.
-          bullets.length = 0; ebullets.length = 0;
+          // Reinicio seguro de todos los efectos de combate antes de limpiar la sala.
+          bullets.length = 0; ebullets.length = 0; clouds.length = 0; flares.length = 0; pools.length = 0; xwList.length = 0; orbs.length = 0;
+          pings.length = 0; texts = texts.filter(t => t && t.t > 0);
+          if (amalEncounter && amalEncounter.phase === 'arena') { amalEncounter = null; amalMusicButton.style.display = 'none'; if (amalMusic) amalMusic.pause(); }
+          if (typeof parryT !== 'undefined') parryT = 0;
           if (typeof parryT !== 'undefined') parryT = 0;
           if (typeof parryCd !== 'undefined') parryCd = 0;
           boomFx(e.x, e.y, 220, col, '#3bd98a'); shake(24); hitstop = 0.3; AudioSys.sfx('boom', true); AudioSys.sfx('kill');
-          for (let i = 0; i < 4; i++) setTimeout(() => { if (state === 'playing') { boomFx(e.x + rand(-60, 60), e.y + rand(-60, 60), 100, col, '#3bd98a'); shake(14); AudioSys.sfx('boom', true); } }, i * 220);
+          // Sin timeouts de explosión: evitamos efectos atrasados que se disparen en la sala siguiente.
           for (let i = 0; i < 6; i++) pickups.push({ x: e.x + rand(-40, 40), y: e.y + rand(-40, 40), vx: rand(-120, 120), vy: rand(-120, 120), heal: 12, t: 0 });
           ebullets.forEach(b => spark(b.x, b.y, 3, '#ff4fd8', 150)); ebullets = []; for (const o of enemies) if (o.type === 'bait') o.dead = true;
         } else {
@@ -1282,7 +1287,7 @@
         }
         let og = e.boss ? 12 : e.mini ? 8 : (Math.random() < (0.3 + 0.2 * chm('greed')) * (1 + 0.5 * style / 100) * (1 + 0.15 * cfg.pres) ? 1 : 0);
         og *= 3; if (og) { AudioSys.sfx('coin'); organs += og; floatText('+' + og + ' ÓRGANO', e.x, e.y - e.r - 28, '#ff8fa3', 12); }
-        if (e.mini) { pend++; level++; xpNeed = Math.round(xpNeed * 1.25); if (level === 5 || level === 10 || level === 20) cpend++; banner = { t: 2.6, max: 2.6, l1: '¡MINIJEFE DERROTADO!', l2: 'Subes un nivel' }; AudioSys.sfx('upgrade'); }
+        if (e.mini) { pend++; if (level < MAX_LEVEL) { level++; xpNeed = Math.round(xpNeed * 1.25); if (level === 5 || level === 10 || level === 20) cpend++; } banner = { t: 2.6, max: 2.6, l1: '¡MINIJEFE DERROTADO!', l2: 'Subes un nivel' }; AudioSys.sfx('upgrade'); }
         const guestGotKill = MP && MP.connected && MP.isHost && e.lastHitBy && e.lastHitBy !== MP.id;
         const lc = guestGotKill ? 0 : has('leech') + 2 * chm('vamp');
         if (lc > 0 && !P.dead) { P.hp = Math.min(P.maxHp, P.hp + 3 * lc); floatText('+' + 3 * lc, P.x, P.y - 28, '#c46bff', 13); }
@@ -2147,8 +2152,10 @@
             MP.socket.send(JSON.stringify({ type: 'xp-request', amount: Math.max(0, Number(n) || 0), xpStat: P.st.xp }));
           return;
         }
+        if (level >= MAX_LEVEL) { level = MAX_LEVEL; xp = xpNeed; return; }
         xp += n * P.st.xp * (1 + 0.2 * style / 100) * (1 + 0.5 * (floorN - 1) + loop) * (1 - 0.1 * cfg.pres) * 2;
-        while (xp >= xpNeed) { xp -= xpNeed; level++; xpNeed = Math.round(xpNeed * 1.25); pend++; if (level === 5 || level === 10 || level === 20) cpend++; }
+        while (xp >= xpNeed && level < MAX_LEVEL) { xp -= xpNeed; level++; xpNeed = Math.round(xpNeed * 1.25); pend++; if (level === 5 || level === 10 || level === 20) cpend++; }
+        if (level >= MAX_LEVEL) { level = MAX_LEVEL; xp = xpNeed; pend = 0; cpend = 0; }
       }
       const STATS = [
         { id: 's_dmg', k: 'dmg', name: 'DAÑO BRUTAL', label: 'Daño', base: 0.12, art: 'implo', icon: 'burst' },
@@ -2950,7 +2957,7 @@
           const L = [...seen]; let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9; for (const c of L) { x0 = Math.min(x0, c.x); x1 = Math.max(x1, c.x); y0 = Math.min(y0, c.y); y1 = Math.max(y1, c.y); }
           const cs = Math.min(18, 120 / Math.max(x1 - x0 + 1, y1 - y0 + 1)), ox = W - 24 - (x1 - x0 + 1) * cs, oy = 214;
           for (const c of L) { const x = ox + (c.x - x0) * cs, y = oy + (c.y - y0) * cs; ctx.globalAlpha = c.visited ? 0.9 : 0.4; ctx.fillStyle = c.visited ? (c.cleared ? '#34536b' : '#6b3434') : '#16222e'; ctx.fillRect(x, y, cs - 2, cs - 2); ctx.strokeStyle = c.type === 'boss' ? '#ff3b3b' : c.type === 'shop' ? '#ffe94a' : c.type === 'mini' ? '#c46bff' : c.type === 'secret' ? '#2ee6ff' : c.type === 'altar' ? '#ff7a3b' : '#8fb8d8'; ctx.lineWidth = c === cell ? 3 : 1.5; ctx.strokeRect(x, y, cs - 2, cs - 2); } ctx.globalAlpha = 1;
-          ctx.fillStyle = 'rgba(255,255,255,.12)'; ctx.fillRect(0, H - 6, W, 6); ctx.fillStyle = '#7dff6a'; ctx.fillRect(0, H - 6, W * Math.min(1, xp / xpNeed), 6); if (chm('streak') && streak > 0) txt('RACHA ' + streak + ' · +' + Math.round(4 * chm('streak') * streak) + '% daño', 14, H - 70, 12, '#ff9a3b', 'left'); txt('NIV ' + level + '  ·  ' + Math.floor(xp) + '/' + xpNeed + ' XP', 12, H - 12, 12, '#cfe0f0', 'left');
+          ctx.fillStyle = 'rgba(255,255,255,.12)'; ctx.fillRect(0, H - 6, W, 6); ctx.fillStyle = '#7dff6a'; ctx.fillRect(0, H - 6, W * Math.min(1, xp / xpNeed), 6); if (chm('streak') && streak > 0) txt('RACHA ' + streak + ' · +' + Math.round(4 * chm('streak') * streak) + '% daño', 14, H - 70, 12, '#ff9a3b', 'left'); txt(level >= MAX_LEVEL ? 'NIV ' + MAX_LEVEL + '  ·  NIVEL MÁXIMO' : 'NIV ' + level + '  ·  ' + Math.floor(xp) + '/' + xpNeed + ' XP', 12, H - 12, 12, '#cfe0f0', 'left');
         }
         for (const e of enemies) if (e.bounty && !e.dead) { ctx.save(); ctx.strokeStyle = '#ffd23f'; ctx.lineWidth = 3; ctx.shadowColor = '#ffd23f'; ctx.shadowBlur = 12; ctx.beginPath(); ctx.arc(e.x, e.y, e.r + 12 + Math.sin(time * 8) * 2, 0, TAU); ctx.stroke(); txt('$', e.x, e.y - e.r - 18, 14, '#ffd23f', 'center', 6); ctx.restore(); }
         for (const b of bots) { ctx.save(); ctx.translate(b.x, b.y); ctx.scale(b.big || 1, b.big || 1); ctx.rotate(Math.atan2(P.y - b.y, P.x - b.x) + Math.sin(time * 10) * 0.2); ctx.fillStyle = '#6ae0ff'; ctx.strokeStyle = '#0a3a50'; ctx.lineWidth = 2; ctx.beginPath(); ctx.ellipse(0, 0, 11, 6, 0, 0, TAU); ctx.fill(); ctx.stroke(); ctx.beginPath(); ctx.moveTo(-10, 0); ctx.lineTo(-17, -6); ctx.lineTo(-17, 6); ctx.closePath(); ctx.fill(); ctx.fillStyle = '#fff'; ctx.fillRect(4, -3, 3, 3); ctx.restore(); }
@@ -5298,9 +5305,9 @@ maxRank = Math.max(maxRank, sr()); ambT -= dt; if (ambT <= 0) { ambT = rand(9, 2
           for (const id of [...MP.pendingPickupIds]) if (!pickups.some(p => p.mpId === id)) MP.pendingPickupIds.delete(id);
         }
         if (Array.isArray(data.orbs)) orbs = mpClone(data.orbs) || [];
-        if (Number.isFinite(data.xp)) xp = data.xp;
+        if (Number.isFinite(data.xp)) xp = level >= MAX_LEVEL ? xpNeed : Math.max(0, data.xp);
         const previousSyncedLevel = level;
-        if (Number.isFinite(data.level)) level = data.level;
+        if (Number.isFinite(data.level)) level = clamp(Math.floor(data.level), 1, MAX_LEVEL);
         if (!MP.isHost && P && previousSyncedLevel < 5 && level >= 5 && !P.path && !MP.localClassDone) {
           MP.localClassOpen = true;
           state = 'class';
@@ -5316,7 +5323,7 @@ maxRank = Math.max(maxRank, sr()); ambT -= dt; if (ambT <= 0) { ambT = rand(9, 2
             }
           }
         }
-        if (Number.isFinite(data.xpNeed)) xpNeed = data.xpNeed;
+        if (Number.isFinite(data.xpNeed)) xpNeed = Math.max(1, data.xpNeed);
         if (Number.isFinite(data.organs)) organs = data.organs;
         if (Number.isFinite(data.pend)) pend = data.pend;
         if (Number.isFinite(data.cpend)) cpend = data.cpend;
