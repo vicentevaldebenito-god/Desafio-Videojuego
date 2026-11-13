@@ -79,11 +79,11 @@ def main():
     if not HTML.exists():
         raise SystemExit(f"Missing game file: {HTML}")
     original = HTML.read_text(encoding="utf-8")
-    marker = "    })();\\n  </script>"
+    marker = "    })();\n  </script>"
     injection_point = original.rfind(marker)
     if injection_point < 0:
         raise SystemExit("Could not safely find the end of the game IIFE for isolated tests.")
-    instrumented = original[:injection_point] + TEST_API + "\\n" + original[injection_point:]
+    instrumented = original[:injection_point] + TEST_API + "\n" + original[injection_point:]
     if SHOTS.exists():
         shutil.rmtree(SHOTS)
     SHOTS.mkdir(parents=True)
@@ -98,7 +98,9 @@ def main():
         page.wait_for_selector("#game")
         record("HTML loads and canvas exists",page.locator("#game").count()==1,page.title())
 
-        if page.evaluate("() => !window.__ABYSSAL_TEST__"):\n            raise RuntimeError("Test API was not installed. page errors=" + json.dumps(page_errors) + " console=" + json.dumps(console_errors))\n        boot=page.evaluate("() => window.__ABYSSAL_TEST__.boot()")
+        if page.evaluate("() => !window.__ABYSSAL_TEST__"):
+            raise RuntimeError("Test API was not installed. page errors=" + json.dumps(page_errors) + " console=" + json.dumps(console_errors))
+        boot=page.evaluate("() => window.__ABYSSAL_TEST__.boot()")
         record("New run initializes playable state",boot["state"]=="playing" and boot["player"] and boot["canvas"],json.dumps(boot))
 
         dimensions,biomes,screenshot_hashes=[],[],[]
