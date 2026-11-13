@@ -11,6 +11,9 @@ import shutil
 import sys
 import time
 from playwright.sync_api import sync_playwright
+from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
+from functools import partial
+from threading import Thread
 
 ROOT = Path(__file__).resolve().parents[1]
 HTML = ROOT / "index.html"
@@ -84,9 +87,9 @@ def main():
     if injection_point < 0:
         raise SystemExit("Could not safely find the end of the game IIFE for isolated tests.")
     instrumented = original[:injection_point] + TEST_API + "\n" + original[injection_point:]
-    # Shim secure-context-only UUID API before the game's first script executes.
-    uuid_shim = "<script>Object.defineProperty(window.crypto,'randomUUID',{configurable:true,value:(()=>{let id=0;return()=>String(++id)+'-test-uuid'})()});</script>"
-    instrumented = instrumented.replace("<script>", uuid_shim + "\n  <script>", 1)
+    httpd = ThreadingHTTPServer(("127.0.0.1", 0), partial(SimpleHTTPRequestHandler, directory=str(ROOT)))
+    server_thread = Thread(target=httpd.serve_forever, daemon=True)
+    server_thread.start()
     if SHOTS.exists():
         shutil.rmtree(SHOTS)
     SHOTS.mkdir(parents=True)
@@ -97,7 +100,8 @@ def main():
         page_errors,console_errors=[],[]
         page.on("pageerror",lambda e:page_errors.append(str(e)))
         page.on("console",lambda m:console_errors.append(m.text) if m.type=="error" else None)
-        page.set_content(instrumented,wait_until="load")
+        page.route("**/index.html", lambda route: route.fulfill(status=200,content_type="text/html; charset=utf-8",body=instrumented))
+        page.goto(f"http://127.0.0.1:{httpd.server_port}/index.html",wait_until="load")
         page.wait_for_selector("#game")
         record("HTML loads and canvas exists",page.locator("#game").count()==1,page.title())
 
@@ -138,6 +142,8 @@ def main():
         record("No uncaught browser JavaScript exceptions",not page_errors,json.dumps(page_errors[:8]))
         record("No browser console errors",not console_errors,json.dumps(console_errors[:8]))
         browser.close()
+    httpd.shutdown()
+    httpd.server_close()
 
     out=ROOT/"abyssal-simulation-report.json"
     out.write_text(json.dumps(REPORT,indent=2,ensure_ascii=False),encoding="utf-8")
