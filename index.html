@@ -2381,7 +2381,7 @@
         ctx.restore();
       }
       function drawShafts() {
-        const th = THEMES[floorN - 1] || THEMES[0]; ctx.save(); ctx.globalCompositeOperation = 'lighter';
+        const th = THEMES[(Math.max(1, floorN) - 1) % THEMES.length] || THEMES[0]; ctx.save(); ctx.globalCompositeOperation = 'lighter';
         for (let i = 0; i < 5; i++) { const x0 = roomW * ((i + 0.5) / 5) + Math.sin(time * 0.3 + i) * 40, g = ctx.createLinearGradient(x0, 0, x0 + 160, roomH * 0.9); g.addColorStop(0, th.accent + '1a'); g.addColorStop(1, th.accent + '00'); ctx.fillStyle = g; ctx.beginPath(); ctx.moveTo(x0 - 30, 0); ctx.lineTo(x0 + 40, 0); ctx.lineTo(x0 + 230, roomH); ctx.lineTo(x0 + 60, roomH); ctx.fill(); }
         ctx.restore();
       }
@@ -3408,7 +3408,7 @@ maxRank = Math.max(maxRank, sr()); ambT -= dt; if (ambT <= 0) { ambT = rand(9, 2
          14. RENDER: ENTIDADES
          --------------------------------------------------------------------- */
       function drawPlayer(player = P) {
-        const p = player, th = THEMES[floorN - 1] || THEMES[(Math.max(1, floorN) - 1) % THEMES.length] || THEMES[0];
+        const p = player, th = THEMES[(Math.max(1, floorN) - 1) % THEMES.length] || THEMES[0];
         ctx.save(); ctx.translate(p.x, p.y);
         ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.beginPath(); ctx.ellipse(3, 6, p.r + 2, p.r, 0, 0, TAU); ctx.fill();
         ctx.rotate(p.angle);
@@ -4066,7 +4066,7 @@ maxRank = Math.max(maxRank, sr()); ambT -= dt; if (ambT <= 0) { ambT = rand(9, 2
       }
       function drawWorld() {
         amalMusicButton.style.display = amalEncounter && ['corridor','awakening','materialize','arena'].includes(amalEncounter.phase) ? 'block' : 'none';
-        const th = THEMES[floorN - 1];
+        const th = THEMES[(Math.max(1, floorN) - 1) % THEMES.length] || THEMES[0];
         glowQ = [];
         if(amalCameraActive()) { drawAmalCave(); drawChest(); } else { ctx.drawImage(bgCv, 0, 0); drawShafts(); drawCaustics(); drawAmalBackdrop(); drawPools(); drawClouds(); }
         drawSecret();
@@ -4209,7 +4209,7 @@ maxRank = Math.max(maxRank, sr()); ambT -= dt; if (ambT <= 0) { ambT = rand(9, 2
           }
           ctx.globalAlpha = 1;
         }
-        const th = THEMES[floorN - 1] || THEMES[0], hpf = clamp(P.hp / P.maxHp, 0, 1), hc = hpf > 0.5 ? '#3bd98a' : hpf > 0.25 ? '#ffb13b' : '#ff3b4a';
+        const th = THEMES[(Math.max(1, floorN) - 1) % THEMES.length] || THEMES[0], hpf = clamp(P.hp / P.maxHp, 0, 1), hc = hpf > 0.5 ? '#3bd98a' : hpf > 0.25 ? '#ffb13b' : '#ff3b4a';
         ctx.globalAlpha = fadeA(14, 14, 236, 86); panel(14, 14, 236, 86);
         bar(24, 22, 216, 12, hpf, hc); txt(Math.ceil(P.hp) + '/' + P.maxHp, 132, 32, 11, '#fff', 'center');
         { const ns = Math.max(P.shield, has('shark') + chm('plate'), 0); for (let i = 0; i < ns; i++) { const x = 32 + i * 18; ctx.strokeStyle = '#7ad7ff'; ctx.lineWidth = 1.5; ctx.fillStyle = i < P.shield ? 'rgba(122,215,255,0.85)' : 'rgba(122,215,255,0.12)'; ctx.beginPath(); ctx.moveTo(x, 42); ctx.lineTo(x + 7, 45); ctx.lineTo(x + 5, 54); ctx.lineTo(x, 58); ctx.lineTo(x - 5, 54); ctx.lineTo(x - 7, 45); ctx.closePath(); ctx.fill(); ctx.stroke(); } }
@@ -4365,7 +4365,7 @@ maxRank = Math.max(maxRank, sr()); ambT -= dt; if (ambT <= 0) { ambT = rand(9, 2
       }
       function drawUpgrade() {
         dim(0.72);
-        const th = THEMES[floorN - 1];
+        const th = THEMES[(Math.max(1, floorN) - 1) % THEMES.length] || THEMES[0];
         if (MP && MP.connected && !MP.isHost && MP.localUpgradeDone) {
           txt('MEJORA SELECCIONADA', W / 2, H / 2 - 18, 30, '#7dff6a', 'center', 12);
           txt('ESPERANDO A QUE EL ANFITRIÓN TERMINE...', W / 2, H / 2 + 24, 15, '#8fb8d8', 'center');
