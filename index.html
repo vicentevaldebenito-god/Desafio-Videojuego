@@ -832,10 +832,28 @@
         c.fillStyle='rgba(0,0,0,.52)';c.beginPath();c.ellipse(cx+10,y+h-1,w*.62,Math.max(9,h*.24),0,0,TAU);c.fill();
         // Cuerpo principal con volumen, borde erosionado y una cara iluminada.
         const body=c.createLinearGradient(x,y,x+w,y+h);body.addColorStop(0,'#82949a');body.addColorStop(.24,th.rock);body.addColorStop(.72,th.wall);body.addColorStop(1,th.deep);
-        c.fillStyle=body;c.beginPath();c.moveTo(x+w*.04,y+h*.82);c.lineTo(x+w*.09,y+h*.43);c.lineTo(x+w*.23,y+h*.18);c.lineTo(x+w*.39,y+h*.11);c.lineTo(x+w*.52,y+h*.2);c.lineTo(x+w*.72,y+h*.08);c.lineTo(x+w*.91,y+h*.34);c.lineTo(x+w*.97,y+h*.83);c.lineTo(x+w*.78,y+h*.96);c.lineTo(x+w*.2,y+h*.96);c.closePath();c.fill();
-        c.strokeStyle=th.accent+'88';c.lineWidth=2.5;c.stroke();
-        facet([[x+w*.1,y+h*.43],[x+w*.24,y+h*.19],[x+w*.4,y+h*.12],[x+w*.47,y+h*.42],[x+w*.32,y+h*.66]],'#d8f1ec',.22);
-        facet([[x+w*.52,y+h*.2],[x+w*.72,y+h*.09],[x+w*.91,y+h*.35],[x+w*.76,y+h*.53],[x+w*.63,y+h*.43]],'#ffffff',.13);
+        c.fillStyle=body;c.beginPath();
+        if(b==='reef'){
+          c.moveTo(x+w*.04,y+h*.83);c.bezierCurveTo(x-w*.02,y+h*.55,x+w*.12,y+h*.38,x+w*.2,y+h*.42);c.bezierCurveTo(x+w*.12,y+h*.12,x+w*.38,y+h*.06,x+w*.45,y+h*.31);c.bezierCurveTo(x+w*.56,y-h*.02,x+w*.68,y+h*.14,x+w*.68,y+h*.35);c.bezierCurveTo(x+w*.84,y+h*.16,x+w*.99,y+h*.43,x+w*.94,y+h*.83);c.quadraticCurveTo(cx,y+h*1.04,x+w*.04,y+h*.83);
+        }else if(b==='toxic'){
+          c.ellipse(x+w*.3,y+h*.62,w*.27,h*.31,-.25,0,TAU);c.ellipse(x+w*.57,y+h*.52,w*.31,h*.4,.18,0,TAU);c.ellipse(x+w*.76,y+h*.68,w*.2,h*.27,-.1,0,TAU);
+        }else if(b==='trench'){
+          c.moveTo(x+w*.02,y+h*.96);c.lineTo(x+w*.12,y+h*.32);c.lineTo(x+w*.31,y+h*.03);c.lineTo(x+w*.4,y+h*.58);c.lineTo(x+w*.58,y-h*.02);c.lineTo(x+w*.68,y+h*.47);c.lineTo(x+w*.86,y+h*.12);c.lineTo(x+w*.98,y+h*.96);c.closePath();
+        }else if(b==='cathedral'){
+          c.moveTo(x+w*.08,y+h*.95);c.lineTo(x+w*.08,y+h*.2);c.lineTo(x+w*.22,y+h*.2);c.lineTo(x+w*.22,y+h*.08);c.lineTo(x+w*.78,y+h*.08);c.lineTo(x+w*.78,y+h*.2);c.lineTo(x+w*.92,y+h*.2);c.lineTo(x+w*.92,y+h*.95);c.closePath();
+        }else if(b==='smokers'){
+          c.moveTo(x+w*.04,y+h*.96);c.lineTo(x+w*.15,y+h*.62);c.lineTo(x+w*.27,y+h*.49);c.lineTo(x+w*.3,y+h*.12);c.lineTo(x+w*.4,y+h*.04);c.lineTo(x+w*.6,y+h*.04);c.lineTo(x+w*.7,y+h*.12);c.lineTo(x+w*.73,y+h*.49);c.lineTo(x+w*.86,y+h*.62);c.lineTo(x+w*.96,y+h*.96);c.closePath();
+        }else if(b==='kelp'){
+          c.moveTo(x+w*.08,y+h*.98);c.bezierCurveTo(x+w*.26,y+h*.7,x+w*.05,y+h*.35,x+w*.3,y+h*.02);c.bezierCurveTo(x+w*.43,y+h*.3,x+w*.36,y+h*.68,x+w*.52,y+h*.98);c.bezierCurveTo(x+w*.62,y+h*.64,x+w*.57,y+h*.27,x+w*.83,y+h*.08);c.bezierCurveTo(x+w*.76,y+h*.48,x+w*.98,y+h*.72,x+w*.94,y+h*.98);c.closePath();
+        }else if(b==='glacier'){
+          c.moveTo(x+w*.03,y+h*.94);c.lineTo(x+w*.2,y+h*.18);c.lineTo(x+w*.38,y+h*.45);c.lineTo(x+w*.53,y+h*.01);c.lineTo(x+w*.7,y+h*.43);c.lineTo(x+w*.86,y+h*.12);c.lineTo(x+w*.98,y+h*.94);c.closePath();
+        }else{
+          c.moveTo(x+w*.03,y+h*.95);c.lineTo(x+w*.13,y+h*.22);c.quadraticCurveTo(cx,y-h*.12,x+w*.87,y+h*.22);c.lineTo(x+w*.97,y+h*.95);c.lineTo(x+w*.81,y+h*.84);c.lineTo(x+w*.72,y+h*.37);c.quadraticCurveTo(cx,y+h*.1,x+w*.28,y+h*.37);c.lineTo(x+w*.19,y+h*.84);c.closePath();
+        }
+        c.fill();c.strokeStyle=th.accent+'88';c.lineWidth=2.5;c.stroke();
+        if(b==='trench'||b==='glacier'){facet([[x+w*.2,y+h*.18],[x+w*.38,y+h*.45],[x+w*.3,y+h*.78]],'#d8f1ec',.22);facet([[x+w*.53,y+h*.01],[x+w*.7,y+h*.43],[x+w*.58,y+h*.66]],'#ffffff',.16);}
+        else if(b==='cathedral'){c.fillStyle='rgba(3,10,18,.58)';c.fillRect(x+w*.34,y+h*.34,w*.32,h*.61);c.strokeStyle='rgba(226,206,158,.55)';c.lineWidth=3;c.strokeRect(x+w*.34,y+h*.34,w*.32,h*.61);}
+        else if(b==='grave'){c.strokeStyle='rgba(226,198,185,.65)';c.lineWidth=Math.max(5,w*.045);c.beginPath();c.moveTo(x+w*.18,y+h*.86);c.quadraticCurveTo(cx,y-h*.08,x+w*.82,y+h*.86);c.stroke();}
         // Estrías y pequeñas fracturas rompen la silueta repetitiva.
         c.lineCap='round';c.lineWidth=1.5;c.strokeStyle='rgba(2,8,15,.52)';
         for(let q=0;q<4;q++){const px=x+w*(.2+q*.17);c.beginPath();c.moveTo(px,y+h*(.25+(q%2)*.08));c.lineTo(px+w*.035,y+h*(.48+(q%3)*.08));c.lineTo(px-w*.018,y+h*.67);c.stroke();}
